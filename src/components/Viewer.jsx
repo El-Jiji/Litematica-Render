@@ -57,9 +57,17 @@ function ColoredBlockInstancedMesh({ name, positions }) {
 function TexturedBlockInstancedMesh({ name, positions }) {
   const meshRef = useRef();
 
-  const topUrl = getTextureUrl(name, "top");
-  const bottomUrl = getTextureUrl(name, "bottom");
-  const sideUrl = getTextureUrl(name, "side");
+  // We need to handle properties. 
+  // Since we are instancing, all blocks in this mesh *share* the same texture.
+  // BUT the grouping in SceneContent groups by "name" only, effectively ignoring props.
+  // This is a flaw in the current Viewer logic if we want per-state textures (like vertical vs horizontal logs in the same group).
+  // FOR NOW, we will just use the props of the first item to determine the texture for the group.
+  // A proper fix would require grouping by "name + unique_texture_key".
+  const firstBlockProps = positions[0]?.props || {};
+
+  const topUrl = getTextureUrl(name, "top", firstBlockProps);
+  const bottomUrl = getTextureUrl(name, "bottom", firstBlockProps);
+  const sideUrl = getTextureUrl(name, "side", firstBlockProps);
 
   // Load textures
   const [topTex, bottomTex, sideTex] = useTexture([topUrl, bottomUrl, sideUrl]);

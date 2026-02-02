@@ -1,0 +1,356 @@
+{
+  "minecraft:grass_block": {
+    "sides": {
+      "top": "grass_block_top",
+      "bottom": "dirt",
+      "side": "grass_block_side",
+      "north": "grass_block_side",
+      "south": "grass_block_side",
+      "east": "grass_block_side",
+      "west": "grass_block_side"
+    }
+  },
+  "minecraft:stone": { "texture": "stone" },
+  "minecraft:dirt": { "texture": "dirt" },
+  "minecraft:cobblestone": { "texture": "cobblestone" },
+  "minecraft:bedrock": { "texture": "bedrock" },
+  "minecraft:sand": { "texture": "sand" },
+  "minecraft:red_sand": { "texture": "red_sand" },
+  "minecraft:gravel": { "texture": "gravel" },
+  "minecraft:gold_ore": { "texture": "gold_ore" },
+  "minecraft:iron_ore": { "texture": "iron_ore" },
+  "minecraft:coal_ore": { "texture": "coal_ore" },
+  "minecraft:diamond_ore": { "texture": "diamond_ore" },
+  "minecraft:lapis_ore": { "texture": "lapis_ore" },
+  "minecraft:redstone_ore": { "texture": "redstone_ore" },
+  "minecraft:copper_ore": { "texture": "copper_ore" },
+  "minecraft:emerald_ore": { "texture": "emerald_ore" },
+  "minecraft:nether_gold_ore": { "texture": "nether_gold_ore" },
+  "minecraft:flint": { "texture": "flint_block" }, 
+  "minecraft:oak_log": {
+    "sides": {
+      "top": "oak_log_top",
+      "bottom": "oak_log_top",
+      "side": "oak_log",
+      "north": "oak_log",
+      "south": "oak_log",
+      "east": "oak_log",
+      "west": "oak_log"
+    }
+  },
+  "minecraft:spruce_log": {
+    "sides": {
+      "top": "spruce_log_top",
+      "bottom": "spruce_log_top",
+      "side": "spruce_log",
+       "north": "spruce_log",
+      "south": "spruce_log",
+      "east": "spruce_log",
+      "west": "spruce_log"
+    }
+  },
+  "minecraft:birch_log": {
+    "sides": {
+      "top": "birch_log_top",
+      "bottom": "birch_log_top",
+      "side": "birch_log",
+       "north": "birch_log",
+      "south": "birch_log",
+      "east": "birch_log",
+      "west": "birch_log"
+    }
+  },
+  "minecraft:jungle_log": {
+    "sides": {
+      "top": "jungle_log_top",
+      "bottom": "jungle_log_top",
+      "side": "jungle_log",
+       "north": "jungle_log",
+      "south": "jungle_log",
+      "east": "jungle_log",
+      "west": "jungle_log"
+    }
+  },
+  "minecraft:acacia_log": {
+    "sides": {
+      "top": "acacia_log_top",
+      "bottom": "acacia_log_top",
+      "side": "acacia_log",
+       "north": "acacia_log",
+      "south": "acacia_log",
+      "east": "acacia_log",
+      "west": "acacia_log"
+    }
+  },
+  "minecraft:dark_oak_log": {
+    "sides": {
+      "top": "dark_oak_log_top",
+      "bottom": "dark_oak_log_top",
+      "side": "dark_oak_log",
+       "north": "dark_oak_log",
+      "south": "dark_oak_log",
+      "east": "dark_oak_log",
+      "west": "dark_oak_log"
+    }
+  },
+  "minecraft:glass": { "texture": "glass" },
+  "minecraft:oak_planks": { "texture": "oak_planks" },
+  "minecraft:spruce_planks": { "texture": "spruce_planks" },
+  "minecraft:birch_planks": { "texture": "birch_planks" },
+  "minecraft:jungle_planks": { "texture": "jungle_planks" },
+  "minecraft:acacia_planks": { "texture": "acacia_planks" },
+  "minecraft:dark_oak_planks": { "texture": "dark_oak_planks" },
+  "minecraft:crimson_planks": { "texture": "crimson_planks" },
+  "minecraft:warped_planks": { "texture": "warped_planks" },
+  "minecraft:mangrove_planks": { "texture": "mangrove_planks" },
+  "minecraft:bamboo_planks": { "texture": "bamboo_planks" },
+  "minecraft:cherry_planks": { "texture": "cherry_planks" },
+
+  "minecraft:smooth_stone": { "texture": "smooth_stone" },
+  "minecraft:diorite": { "texture": "diorite" },
+  "minecraft:polished_diorite": { "texture": "polished_diorite" },
+  "minecraft:andesite": { "texture": "andesite" },
+  "minecraft:polished_andesite": { "texture": "polished_andesite" },
+  "minecraft:granite": { "texture": "granite" },
+  "minecraft:polished_granite": { "texture": "polished_granite" },
+  "minecraft:bricks": { "texture": "bricks" },
+  "minecraft:stone_bricks": { "texture": "stone_bricks" },
+  "minecraft:mossy_stone_bricks": { "texture": "mossy_stone_bricks" },
+  "minecraft:cracked_stone_bricks": { "texture": "cracked_stone_bricks" },
+  "minecraft:chiseled_stone_bricks": { "texture": "chiseled_stone_bricks" },
+  "minecraft:deepslate_bricks": { "texture": "deepslate_bricks" },
+  "minecraft:cobbled_deepslate": { "texture": "cobbled_deepslate" },
+  "minecraft:polished_deepslate": { "texture": "polished_deepslate" },
+  "minecraft:deepslate_tiles": { "texture": "deepslate_tiles" },
+  "minecraft:nether_bricks": { "texture": "nether_bricks" },
+  "minecraft:red_nether_bricks": { "texture": "red_nether_bricks" },
+  "minecraft:tuff": { "texture": "tuff" },
+  "minecraft:polished_tuff": { "texture": "polished_tuff" },
+  "minecraft:tuff_bricks": { "texture": "tuff_bricks" },
+  "minecraft:calcite": { "texture": "calcite" },
+  "minecraft:mossy_cobblestone": { "texture": "mossy_cobblestone" },
+  "minecraft:mud_bricks": { "texture": "mud_bricks" },
+  "minecraft:prismarine": { "texture": "prismarine" },
+  "minecraft:dark_prismarine": { "texture": "dark_prismarine" },
+  "minecraft:prismarine_bricks": { "texture": "prismarine_bricks" },
+  "minecraft:sea_lantern": { "texture": "sea_lantern" },
+  "minecraft:magma_block": { "texture": "magma" },
+  "minecraft:obsidian": { "texture": "obsidian" },
+  "minecraft:crying_obsidian": { "texture": "crying_obsidian" },
+  "minecraft:netherrack": { "texture": "netherrack" },
+  "minecraft:crimson_nylium": { "texture": "crimson_nylium_side" },
+  "minecraft:warped_nylium": { "texture": "warped_nylium_side" },
+  "minecraft:soul_sand": { "texture": "soul_sand" },
+  "minecraft:soul_soil": { "texture": "soul_soil" },
+  "minecraft:bone_block": { "texture": "bone_block_side" },
+  "minecraft:blackstone": { "texture": "blackstone" },
+  "minecraft:polished_blackstone": { "texture": "polished_blackstone" },
+  "minecraft:polished_blackstone_bricks": { "texture": "polished_blackstone_bricks" },
+  "minecraft:gilded_blackstone": { "texture": "gilded_blackstone" },
+  "minecraft:chiseled_polished_blackstone": { "texture": "chiseled_polished_blackstone" },
+  "minecraft:quartz_block": { "texture": "quartz_block_side" },
+  "minecraft:smooth_quartz": { "texture": "quartz_block_bottom" },
+  "minecraft:chiseled_quartz_block": { "texture": "chiseled_quartz_block" },
+  "minecraft:quartz_bricks": { "texture": "quartz_bricks" },
+  "minecraft:purpur_block": { "texture": "purpur_block" },
+  "minecraft:end_stone": { "texture": "end_stone" },
+  "minecraft:end_stone_bricks": { "texture": "end_stone_bricks" },
+  "minecraft:clay": { "texture": "clay" },
+  "minecraft:packed_ice": { "texture": "packed_ice" },
+  "minecraft:blue_ice": { "texture": "blue_ice" },
+  "minecraft:snow_block": { "texture": "snow" },
+  "minecraft:moss_block": { "texture": "moss_block" },
+  "minecraft:melon": { 
+      "sides": {
+          "top": "melon_top",
+          "bottom": "melon_top",
+          "side": "melon_side",
+          "north": "melon_side",
+          "south": "melon_side",
+          "east": "melon_side",
+          "west": "melon_side"
+      }
+  },
+  "minecraft:pumpkin": { 
+      "sides": {
+          "top": "pumpkin_top",
+          "bottom": "pumpkin_top",
+          "side": "pumpkin_side",
+          "north": "pumpkin_side",
+          "south": "pumpkin_side",
+          "east": "pumpkin_side",
+          "west": "pumpkin_side"
+      }
+  },
+  "minecraft:jack_o_lantern": { 
+      "sides": {
+          "top": "pumpkin_top",
+          "bottom": "pumpkin_top",
+          "side": "pumpkin_side",
+          "north": "pumpkin_side",
+          "south": "pumpkin_side",
+          "east": "pumpkin_side",
+          "west": "pumpkin_side"
+      }
+  },
+  "minecraft:water": { "texture": "water_still" },
+  "minecraft:lava": { "texture": "lava_still" },
+  "minecraft:campfire": { "texture": "campfire_log" },
+  "minecraft:soul_campfire": { "texture": "campfire_log" },
+  
+  "minecraft:copper_block": { "texture": "copper_block" },
+  "minecraft:exposed_copper": { "texture": "exposed_copper" },
+  "minecraft:weathered_copper": { "texture": "weathered_copper" },
+  "minecraft:oxidized_copper": { "texture": "oxidized_copper" },
+  "minecraft:cut_copper": { "texture": "cut_copper" },
+  "minecraft:exposed_cut_copper": { "texture": "exposed_cut_copper" },
+  "minecraft:weathered_cut_copper": { "texture": "weathered_cut_copper" },
+  "minecraft:oxidized_cut_copper": { "texture": "oxidized_cut_copper" },
+
+  "minecraft:iron_door": { "texture": "iron_door_bottom" },
+  "minecraft:oak_door": { "texture": "oak_door_bottom" },
+  "minecraft:spruce_door": { "texture": "spruce_door_bottom" },
+  "minecraft:birch_door": { "texture": "birch_door_bottom" },
+  "minecraft:jungle_door": { "texture": "jungle_door_bottom" },
+  "minecraft:acacia_door": { "texture": "acacia_door_bottom" },
+  "minecraft:dark_oak_door": { "texture": "dark_oak_door_bottom" },
+  "minecraft:mangrove_door": { "texture": "mangrove_door_bottom" },
+  "minecraft:cherry_door": { "texture": "cherry_door_bottom" },
+  "minecraft:bamboo_door": { "texture": "bamboo_door_bottom" },
+  "minecraft:crimson_door": { "texture": "crimson_door_bottom" },
+  "minecraft:warped_door": { "texture": "warped_door_bottom" },
+  "minecraft:pale_oak_door": { "texture": "pale_oak_door_bottom" },
+
+  "minecraft:glass_pane": { "texture": "glass_pane_top" },
+  "minecraft:white_stained_glass_pane": { "texture": "white_stained_glass_pane_top" },
+  "minecraft:orange_stained_glass_pane": { "texture": "orange_stained_glass_pane_top" },
+  "minecraft:magenta_stained_glass_pane": { "texture": "magenta_stained_glass_pane_top" },
+  "minecraft:light_blue_stained_glass_pane": { "texture": "light_blue_stained_glass_pane_top" },
+  "minecraft:yellow_stained_glass_pane": { "texture": "yellow_stained_glass_pane_top" },
+  "minecraft:lime_stained_glass_pane": { "texture": "lime_stained_glass_pane_top" },
+  "minecraft:pink_stained_glass_pane": { "texture": "pink_stained_glass_pane_top" },
+  "minecraft:gray_stained_glass_pane": { "texture": "gray_stained_glass_pane_top" },
+  "minecraft:light_gray_stained_glass_pane": { "texture": "light_gray_stained_glass_pane_top" },
+  "minecraft:cyan_stained_glass_pane": { "texture": "cyan_stained_glass_pane_top" },
+  "minecraft:purple_stained_glass_pane": { "texture": "purple_stained_glass_pane_top" },
+  "minecraft:blue_stained_glass_pane": { "texture": "blue_stained_glass_pane_top" },
+  "minecraft:brown_stained_glass_pane": { "texture": "brown_stained_glass_pane_top" },
+  "minecraft:green_stained_glass_pane": { "texture": "green_stained_glass_pane_top" },
+  "minecraft:red_stained_glass_pane": { "texture": "red_stained_glass_pane_top" },
+  "minecraft:black_stained_glass_pane": { "texture": "black_stained_glass_pane_top" },
+
+  "minecraft:tall_grass": { "texture": "tall_grass_top" },
+  "minecraft:large_fern": { "texture": "large_fern_top" },
+  "minecraft:bamboo": { "texture": "bamboo_stalk" },
+  "minecraft:bamboo_sapling": { "texture": "bamboo_stage0" },
+  "minecraft:small_dripleaf": { "texture": "small_dripleaf_top" },
+  "minecraft:big_dripleaf": { "texture": "big_dripleaf_top" },
+  "minecraft:moss_carpet": { "texture": "moss_block" },
+  "minecraft:azalea": { "texture": "azalea_side" },
+  "minecraft:flowering_azalea": { "texture": "flowering_azalea_side" },
+  "minecraft:hopper": { "texture": "hopper_outside" },
+  "minecraft:lectern": { "texture": "lectern_top" },
+  "minecraft:grindstone": { "texture": "grindstone_side" },
+  "minecraft:chiseled_bookshelf": { "texture": "chiseled_bookshelf_side" },
+  
+  "minecraft:quartz": { "texture": "quartz_block_side" },
+  "minecraft:purpur": { "texture": "purpur_block" },
+  "minecraft:azalea_bush": { "texture": "azalea_side" },
+  "minecraft:flowering_azalea_bush": { "texture": "flowering_azalea_side" },
+  "minecraft:dark_oak": { "texture": "dark_oak_planks" },
+  
+  "minecraft:crimson_hyphae": { "texture": "crimson_stem" },
+  "minecraft:warped_hyphae": { "texture": "warped_stem" },
+  "minecraft:stripped_crimson_hyphae": { "texture": "stripped_crimson_stem" },
+  "minecraft:stripped_warped_hyphae": { "texture": "stripped_warped_stem" },
+  
+  "minecraft:brick": { "texture": "bricks" },
+  
+  "minecraft:basalt": {
+      "sides": {
+          "top": "basalt_top",
+          "bottom": "basalt_top",
+          "side": "basalt_side",
+          "north": "basalt_side",
+          "south": "basalt_side",
+          "east": "basalt_side",
+          "west": "basalt_side"
+      }
+  },
+  "minecraft:polished_basalt": {
+      "sides": {
+          "top": "polished_basalt_top",
+          "bottom": "polished_basalt_top",
+          "side": "polished_basalt_side",
+          "north": "polished_basalt_side",
+          "south": "polished_basalt_side",
+          "east": "polished_basalt_side",
+          "west": "polished_basalt_side"
+      }
+  },
+
+  "minecraft:furnace": {
+      "sides": {
+          "top": "furnace_top",
+          "bottom": "furnace_top",
+          "front": "furnace_front",
+          "side": "furnace_side",
+          "north": "furnace_front", 
+            "south": "furnace_side",
+            "east": "furnace_side",
+            "west": "furnace_side"
+      }
+  },
+  "minecraft:crafting_table": {
+      "sides": {
+          "top": "crafting_table_top",
+          "bottom": "oak_planks",
+          "front": "crafting_table_front",
+          "side": "crafting_table_side",
+          "north": "crafting_table_front",
+            "south": "crafting_table_side",
+            "east": "crafting_table_side",
+            "west": "crafting_table_side"
+      }
+  },
+
+  "minecraft:pearlescent_froglight": {
+    "sides": {
+      "top": "pearlescent_froglight_top",
+      "bottom": "pearlescent_froglight_top",
+      "side": "pearlescent_froglight_side",
+      "north": "pearlescent_froglight_side",
+      "south": "pearlescent_froglight_side",
+      "east": "pearlescent_froglight_side",
+      "west": "pearlescent_froglight_side"
+    }
+  },
+  "minecraft:verdant_froglight": {
+    "sides": {
+      "top": "verdant_froglight_top",
+      "bottom": "verdant_froglight_top",
+      "side": "verdant_froglight_side",
+      "north": "verdant_froglight_side",
+      "south": "verdant_froglight_side",
+      "east": "verdant_froglight_side",
+      "west": "verdant_froglight_side"
+    }
+  },
+  "minecraft:ochre_froglight": {
+    "sides": {
+      "top": "ochre_froglight_top",
+      "bottom": "ochre_froglight_top",
+      "side": "ochre_froglight_side",
+      "north": "ochre_froglight_side",
+      "south": "ochre_froglight_side",
+      "east": "ochre_froglight_side",
+      "west": "ochre_froglight_side"
+    }
+  },
+  "minecraft:dried_ghast": {
+    "texture": "dried_ghast_hydration_0_south"
+  },
+  "minecraft:pointed_dripstone": {
+     "texture": "pointed_dripstone_up_base"
+  }
+}
