@@ -15,8 +15,8 @@
     "@types/three": "^0.182.0",
     "buffer": "^6.0.3",
     "luckysheet": "^2.1.13",
+    "nbt": "^0.8.1",
     "pako": "^2.1.0",
-    "prismarine-nbt": "^2.8.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "three": "^0.182.0"
