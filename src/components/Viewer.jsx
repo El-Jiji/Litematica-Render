@@ -10,6 +10,7 @@ import { blockColors } from "../utils/blockColors";
 import { getTextureUrl } from "../utils/blockTextures";
 import { MaterialList } from "./MaterialList";
 import { Sidebar } from "./Sidebar";
+import bgImage from "../assets/bg.png";
 
 class TextureErrorBoundary extends React.Component {
   constructor(props) {
@@ -329,10 +330,28 @@ export function Viewer({ data }) {
   };
 
   return (
-    <div style={{ width: "100vw", height: "100vh", background: "#111", position: 'relative' }}>
+    <div style={{ width: "100vw", height: "100vh", background: "#000", position: 'relative', overflow: 'hidden' }}>
+
+      {/* Blurred Background Layer */}
+      <div
+        style={{
+          position: 'absolute',
+          top: -20,
+          left: -20,
+          right: -20,
+          bottom: -20,
+          backgroundImage: `url(${bgImage})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          filter: 'blur(20px) brightness(0.6)',
+          zIndex: 0
+        }}
+      />
+
       <Canvas
-        camera={{ position: cameraPosition, fov: 50 }}
-        gl={{ preserveDrawingBuffer: true }}
+        camera={{ position: cameraPosition, fov: 50, near: 0.1, far: 10000 }}
+        gl={{ preserveDrawingBuffer: true, alpha: true }}
+        style={{ position: 'relative', zIndex: 1 }}
       >
         <ambientLight intensity={0.6} />
         <directionalLight position={[10, 20, 10]} intensity={1} castShadow />
