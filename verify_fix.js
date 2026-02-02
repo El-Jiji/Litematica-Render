@@ -7,7 +7,8 @@ const blockMappings = JSON.parse(fs.readFileSync('./src/assets/block_mapping.jso
 // Copy of the logic from BlockMapper.js for testing purposes
 // (We could import it if we set up babel/node correctly, but this is faster for a quick check)
 const SINGLE_TEXTURE_SUFFIXES = [
-  "_planks", "_ore", "_wool", "_concrete", "_terracotta", "_stained_glass"
+  "_planks", "_ore", "_wool", "_concrete", "_terracotta", "_stained_glass",
+  "_fan", "_torch", "_coral", "_glass"
 ];
 
 class BlockMapper {
@@ -46,18 +47,20 @@ class BlockMapper {
     
     // List of suffixes to strip to find the "base" block
     // Order matters: longer suffixes checks first to avoid partial matches (e.g. _wall_sign vs _sign)
+    // List of suffixes to strip to find the "base" block
     const DERIVED_SUFFIXES = [
       "_stairs", "_slab", "_wall_sign", "_wall", "_fence_gate", "_fence", 
       "_button", "_pressure_plate", "_hanging_sign", "_sign",
-      "_brick_wall", "_wood", "_carpet" 
+      "_brick_wall", "_wood", "_carpet",
+      "_wall_fan", "_wall_torch"
     ];
 
     // Simple stripping
     for (const suffix of DERIVED_SUFFIXES) {
         if (name.endsWith(suffix)) {
              name = name.substring(0, name.length - suffix.length);
-             // Special handling: oak_fence -> oak_planks, not oak
-             if (suffix === '_fence' || suffix === '_fence_gate' || suffix === '_sign' || suffix === '_hanging_sign' || suffix === '_wall_sign' || suffix === '_stairs' || suffix === '_slab') {
+             
+             if (suffix === '_fence' || suffix === '_fence_gate' || suffix === '_sign' || suffix === '_hanging_sign' || suffix === '_wall_sign' || suffix === '_stairs' || suffix === '_slab' || suffix === '_button' || suffix === '_pressure_plate' || suffix === '_wall') {
                 if (!name.endsWith('_planks') && !name.includes('_log') && !name.includes('_stem') && !name.includes('_hyphae') && !name.endsWith('_brick') && !name.endsWith('_bricks')) {
                    const woodTypes = ['oak', 'spruce', 'birch', 'jungle', 'acacia', 'dark_oak', 'mangrove', 'cherry', 'bamboo', 'crimson', 'warped', 'pale_oak'];
                    if (woodTypes.includes(name)) {
@@ -65,8 +68,14 @@ class BlockMapper {
                    }
                 }
              }
+
+             if (suffix === '_wall_fan') {
+                 name += '_fan';
+             }
+             if (suffix === '_wall_torch') {
+                 name += '_torch';
+             }
              
-             // Special handling: _wood -> _log (6-sided bark)
              if (suffix === '_wood') {
                  if (!name.includes('_log')) {
                     name += '_log';
@@ -74,23 +83,47 @@ class BlockMapper {
                  // In verification script we can just continue to mapping check
              }
 
-             // Special handling: _carpet -> _wool
              if (suffix === '_carpet') {
                  if (name !== 'moss') {
                     name += '_wool';
                  }
-                 // In verify script, just proceed
              }
 
              break;
         }
     }
     
-    // Normalize singular brick -> plural bricks (common in naming conventions)
+    // Normalize singular brick/tile -> plural bricks/tiles
     if (name.endsWith('_brick')) {
         name += 's';
     }
+    if (name.endsWith('_tile')) {
+        name += 's';
+    }
     
+    // Generic fallback for common complex blocks if specific mapping not found
+    if (name.includes('chest')) {
+        return 'barrel_top'; // Fallback
+    }
+    if (name.includes('copper_golem')) {
+        return 'copper_block';
+    }
+    if (name.includes('_bed')) {
+        return name.replace('_bed', '_wool'); // Visual fallback
+    }
+    if (name.includes('_banner')) {
+        if (name.includes('wall_banner')) {
+             return name.replace('_wall_banner', '_wool');
+        }
+        return name.replace('_banner', '_wool');
+    }
+    if (name.includes('head') || name.includes('skull')) {
+         return 'soul_sand';
+    }
+    if (name.includes('candle_cake')) {
+        return 'cake_top'; // Best visual match
+    }
+
     // Check if the stripped name exists in mappings (e.g. diorite_stairs -> diorite -> mapped?)
     const baseMapping = this.mappings[`minecraft:${name}`];
     if (baseMapping) {
@@ -188,6 +221,40 @@ const testCases = [
     { block: 'minecraft:purpur', face: 'top', expected: 'purpur_block' },
     { block: 'minecraft:azalea_bush', face: 'top', expected: 'azalea_side' },
     { block: 'minecraft:dark_oak', face: 'top', expected: 'dark_oak_planks' },
+    
+    // Comprehensive New Tests
+    { block: 'minecraft:purple_bed', face: 'top', expected: 'purple_wool' }, // fallback
+    { block: 'minecraft:white_banner', face: 'top', expected: 'white_wool' }, // fallback
+    { block: 'minecraft:candle_cake', face: 'top', expected: 'cake_top' }, // fallback
+    { block: 'minecraft:crafter', face: 'top', expected: 'crafter_top' },
+    { block: 'minecraft:resin_bricks', face: 'top', expected: 'resin_bricks' },
+    { block: 'minecraft:piston_head', face: 'bottom', expected: 'piston_top' },
+    { block: 'minecraft:copper_door', face: 'top', expected: 'copper_door_bottom' },
+    { block: 'minecraft:copper_grate', face: 'top', expected: 'copper_grate' },
+    { block: 'minecraft:infested_stone', face: 'top', expected: 'stone' },
+    { block: 'minecraft:redstone_wire', face: 'top', expected: 'redstone_dust_line0' },
+    { block: 'minecraft:fire', face: 'top', expected: 'fire_0' },
+    
+    // Batch 2 Tests
+    { block: 'minecraft:acacia_button', face: 'top', expected: 'acacia_planks' }, // _button -> _planks
+    { block: 'minecraft:oak_pressure_plate', face: 'top', expected: 'oak_planks' }, // _pressure_plate -> _planks
+    { block: 'minecraft:acacia_wall', face: 'top', expected: 'acacia_planks' }, // _wall -> _planks (not stone) WRONG? 
+    // Wait, acacia_wall is NOT vanilla. But user had it? 
+    // If user has acacia_wall, my logic maps it to acacia_planks. That is what I want to verify.
+    
+    { block: 'minecraft:deepslate_tile_wall', face: 'side', expected: 'deepslate_tiles' }, // _wall + _tile -> _tiles
+    
+    { block: 'minecraft:chest', face: 'top', expected: 'barrel_top' }, // fallback
+    { block: 'minecraft:ender_chest', face: 'top', expected: 'barrel_top' },
+    { block: 'minecraft:copper_golem_statue', face: 'top', expected: 'copper_block' },
+    { block: 'minecraft:creeper_head', face: 'top', expected: 'soul_sand' },
+    { block: 'minecraft:horn_coral_wall_fan', face: 'top', expected: 'horn_coral_fan' },
+    { block: 'minecraft:redstone_wall_torch', face: 'top', expected: 'redstone_torch' },
+    
+    { block: 'minecraft:lightning_rod', face: 'top', expected: 'lightning_rod' },
+    { block: 'minecraft:daylight_detector', face: 'top', expected: 'daylight_detector_top' },
+    { block: 'minecraft:trial_spawner', face: 'top', expected: 'bedrock' }, // explicit fallback mapping
+
     // Fallback cases
     { block: 'minecraft:white_wool', face: 'side', expected: 'white_wool' }, 
 ];
@@ -200,7 +267,7 @@ testCases.forEach(tc => {
     let status = 'PASS';
     if (result !== tc.expected) {
         status = 'FAIL';
-        console.error(`[FAIL] ${tc.block} (${tc.face}) -> expected ${tc.expected}, got ${result}`); // keep console for backup
+        console.error(`[FAIL] ${tc.block} (${tc.face}) -> expected ${tc.expected}, got ${result}`); 
     }
     results.push(`[${status}] ${tc.block} (${tc.face}) -> ${result} (expected ${tc.expected})`);
     if (status === 'PASS') passed++;

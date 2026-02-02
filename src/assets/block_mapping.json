@@ -263,6 +263,164 @@
   "minecraft:warped_hyphae": { "texture": "warped_stem" },
   "minecraft:stripped_crimson_hyphae": { "texture": "stripped_crimson_stem" },
   "minecraft:stripped_warped_hyphae": { "texture": "stripped_warped_stem" },
+
+  "minecraft:crafter": {
+      "sides": {
+          "top": "crafter_top",
+          "bottom": "crafter_bottom",
+          "side": "crafter_east",
+          "north": "crafter_north",
+          "south": "crafter_south",
+          "east": "crafter_east",
+          "west": "crafter_west"
+      }
+  },
+  "minecraft:resin_bricks": { "texture": "resin_bricks" },
+  "minecraft:chiseled_resin_bricks": { "texture": "chiseled_resin_bricks" },
+  "minecraft:piston_head": { "texture": "piston_top" },
+  "minecraft:moving_piston": { "texture": "piston_top" },
+  "minecraft:dragon_head": { "texture": "dragon_egg" },
+  "minecraft:dragon_wall_head": { "texture": "dragon_egg" },
+  "minecraft:creeper_head": { "texture": "soul_sand" },
+  "minecraft:creeper_wall_head": { "texture": "soul_sand" },
+  "minecraft:skeleton_skull": { "texture": "skeleton_skull" },
+  "minecraft:skeleton_wall_skull": { "texture": "skeleton_skull" },
+  "minecraft:wither_skeleton_skull": { "texture": "wither_skeleton_skull" },
+  "minecraft:wither_skeleton_wall_skull": { "texture": "wither_skeleton_skull" },
+  "minecraft:zombie_head": { "texture": "zombie_head" },
+  "minecraft:zombie_wall_head": { "texture": "zombie_head" },
+  "minecraft:piglin_head": { "texture": "piglin_head" },
+  "minecraft:piglin_wall_head": { "texture": "piglin_head" },
+  "minecraft:player_head": { "texture": "player_head" },
+  "minecraft:player_wall_head": { "texture": "player_head" },
+  
+  "minecraft:redstone_wire": { "texture": "redstone_dust_line0" },
+  "minecraft:tripwire": { "texture": "tripwire" },
+  "minecraft:fire": { "texture": "fire_0" },
+  "minecraft:soul_fire": { "texture": "soul_fire_0" },
+  "minecraft:chest": { "texture": "barrel_top" },
+  "minecraft:ender_chest": { "texture": "barrel_top" },
+  "minecraft:trapped_chest": { "texture": "barrel_top" },
+  "minecraft:barrel": { 
+      "sides": {
+          "top": "barrel_top",
+          "bottom": "barrel_bottom",
+          "side": "barrel_side"
+      }
+  },
+  
+  "minecraft:bamboo_mosaic": { "texture": "bamboo_mosaic" },
+  "minecraft:bamboo_mosaic_slab": { "texture": "bamboo_mosaic" },
+  "minecraft:bamboo_mosaic_stairs": { "texture": "bamboo_mosaic" },
+  
+  "minecraft:calibrated_sculk_sensor": { "texture": "calibrated_sculk_sensor_top" },
+  "minecraft:sculk_sensor": { "texture": "sculk_sensor_top" },
+  "minecraft:sculk_shrieker": { "texture": "sculk_shrieker_top" },
+  "minecraft:sculk_catalyst": { "texture": "sculk_catalyst_top" },
+  
+  "minecraft:copper_door": { "texture": "copper_door_bottom" },
+  "minecraft:exposed_copper_door": { "texture": "exposed_copper_door_bottom" },
+  "minecraft:weathered_copper_door": { "texture": "weathered_copper_door_bottom" },
+  "minecraft:oxidized_copper_door": { "texture": "oxidized_copper_door_bottom" },
+  
+  "minecraft:copper_trapdoor": { "texture": "copper_trapdoor" },
+  "minecraft:exposed_copper_trapdoor": { "texture": "exposed_copper_trapdoor" },
+  "minecraft:weathered_copper_trapdoor": { "texture": "weathered_copper_trapdoor" },
+  "minecraft:oxidized_copper_trapdoor": { "texture": "oxidized_copper_trapdoor" },
+
+  "minecraft:copper_grate": { "texture": "copper_grate" },
+  "minecraft:exposed_copper_grate": { "texture": "exposed_copper_grate" },
+  "minecraft:weathered_copper_grate": { "texture": "weathered_copper_grate" },
+  "minecraft:oxidized_copper_grate": { "texture": "oxidized_copper_grate" },
+  
+  "minecraft:copper_bulb": { "texture": "copper_bulb" },
+  "minecraft:exposed_copper_bulb": { "texture": "exposed_copper_bulb" },
+  "minecraft:weathered_copper_bulb": { "texture": "weathered_copper_bulb" },
+  "minecraft:oxidized_copper_bulb": { "texture": "oxidized_copper_bulb" },
+
+  "minecraft:chiseled_copper": { "texture": "chiseled_copper" },
+  "minecraft:exposed_chiseled_copper": { "texture": "exposed_chiseled_copper" },
+  "minecraft:weathered_chiseled_copper": { "texture": "weathered_chiseled_copper" },
+  "minecraft:oxidized_chiseled_copper": { "texture": "oxidized_chiseled_copper" },
+
+  "minecraft:trial_spawner": { "texture": "bedrock" },
+  "minecraft:spawner": { "texture": "bedrock" },
+  "minecraft:vault": { "texture": "vault_top" },
+  "minecraft:heavy_core": { "texture": "obsidian" },
+  
+  "minecraft:sniffer_egg": { "texture": "dragon_egg" },
+  "minecraft:torchflower_crop": { "texture": "torchflower_crop_stage1" },
+  "minecraft:pitcher_crop": { "texture": "pitcher_crop_stage4" },
+  "minecraft:pitcher_plant": { "texture": "pitcher_plant_top" },
+  
+  "minecraft:decorated_pot": { "texture": "decorated_pot_side" },
+  "minecraft:suspicious_sand": { "texture": "suspicious_sand_0" },
+  "minecraft:suspicious_gravel": { "texture": "suspicious_gravel_0" },
+  
+  "minecraft:light": { "texture": "glass" },
+  "minecraft:barrier": { "texture": "glass" },
+  "minecraft:structure_void": { "texture": "glass" },
+  "minecraft:jigsaw": { "texture": "jigsaw_top" },
+  "minecraft:command_block": { "texture": "command_block_front" },
+  "minecraft:repeating_command_block": { "texture": "repeating_command_block_front" },
+  "minecraft:chain_command_block": { "texture": "chain_command_block_front" },
+  "minecraft:structure_block": { "texture": "structure_block" },
+
+  "minecraft:lightning_rod": { "texture": "lightning_rod" },
+  "minecraft:daylight_detector": {
+      "sides": {
+          "top": "daylight_detector_top",
+          "bottom": "daylight_detector_top",
+          "side": "daylight_detector_side"
+      }
+  },
+  "minecraft:chiseled_bookshelf": {
+      "sides": {
+          "top": "chiseled_bookshelf_top",
+          "bottom": "chiseled_bookshelf_top",
+          "side": "chiseled_bookshelf_side",
+          "front": "chiseled_bookshelf_empty"
+      }
+  },
+
+  "minecraft:frogspawn": { "texture": "frogspawn" },
+  "minecraft:bee_nest": { 
+      "sides": {
+          "top": "bee_nest_top",
+          "bottom": "bee_nest_bottom",
+          "side": "bee_nest_side",
+          "front": "bee_nest_front"
+      }
+  },
+  "minecraft:beehive": { 
+      "sides": {
+          "top": "beehive_top",
+          "bottom": "beehive_top",
+          "side": "beehive_side",
+          "front": "beehive_front"
+      }
+  },
+  
+  "minecraft:acacia_wall_sign": { "texture": "acacia_planks" },
+  "minecraft:birch_wall_sign": { "texture": "birch_planks" },
+  "minecraft:dark_oak_wall_sign": { "texture": "dark_oak_planks" },
+  "minecraft:jungle_wall_sign": { "texture": "jungle_planks" },
+  "minecraft:oak_wall_sign": { "texture": "oak_planks" },
+  "minecraft:spruce_wall_sign": { "texture": "spruce_planks" },
+  "minecraft:mangrove_wall_sign": { "texture": "mangrove_planks" },
+  "minecraft:cherry_wall_sign": { "texture": "cherry_planks" },
+  "minecraft:bamboo_wall_sign": { "texture": "bamboo_planks" },
+  "minecraft:crimson_wall_sign": { "texture": "crimson_planks" },
+  "minecraft:warped_wall_sign": { "texture": "warped_planks" },
+  "minecraft:pale_oak_wall_sign": { "texture": "pale_oak_planks" },
+
+  "minecraft:infested_stone": { "texture": "stone" },
+  "minecraft:infested_cobblestone": { "texture": "cobblestone" },
+  "minecraft:infested_stone_bricks": { "texture": "stone_bricks" },
+  "minecraft:infested_mossy_stone_bricks": { "texture": "mossy_stone_bricks" },
+  "minecraft:infested_cracked_stone_bricks": { "texture": "cracked_stone_bricks" },
+  "minecraft:infested_chiseled_stone_bricks": { "texture": "chiseled_stone_bricks" },
+  "minecraft:infested_deepslate": { "texture": "deepslate" },
   
   "minecraft:brick": { "texture": "bricks" },
   

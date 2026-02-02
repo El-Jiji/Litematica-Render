@@ -3,7 +3,8 @@ import blockMappings from '../assets/block_mapping.json';
 
 // Fallback for simple single-texture blocks that might not be in the JSON
 const SINGLE_TEXTURE_SUFFIXES = [
-  "_planks", "_ore", "_wool", "_concrete", "_terracotta", "_stained_glass"
+  "_planks", "_ore", "_wool", "_concrete", "_terracotta", "_stained_glass",
+  "_fan", "_torch", "_coral", "_glass"
 ];
 
 export class BlockMapper {
@@ -108,7 +109,25 @@ export class BlockMapper {
         name += 's';
     }
     
-    // Check if the stripped name exists in mappings (e.g. diorite_stairs -> diorite -> mapped?)
+    // Generic fallback for common complex blocks if specific mapping not found
+    if (name.includes('_bed')) {
+        return name.replace('_bed', '_wool'); // Visual fallback
+    }
+    if (name.includes('_banner')) {
+        if (name.includes('wall_banner')) {
+             return name.replace('_wall_banner', '_wool');
+        }
+        return name.replace('_banner', '_wool');
+    }
+    if (name.includes('head') || name.includes('skull')) {
+         // Try to map to a head texture if possible, but heads are entities.
+         // Let's rely on explicit mappings in JSON for heads.
+    }
+    if (name.includes('candle_cake')) {
+        return 'cake_top'; // Best visual match
+    }
+    
+    // Check if the stripped name exists in mappings
     const baseMapping = this.mappings[`minecraft:${name}`];
     if (baseMapping) {
         // Special case for WOOD: if original had _wood specific suffix, we likely want the SIDE texture of the log on all faces.
