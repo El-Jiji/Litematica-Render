@@ -1,14 +1,15 @@
-import React, { useMemo, useEffect, useRef, Suspense } from "react";
+import React, { useMemo, useEffect, useRef, Suspense, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import {
   OrbitControls,
-  Center,
   Environment,
   useTexture,
 } from "@react-three/drei";
 import * as THREE from "three";
 import { blockColors } from "../utils/blockColors";
 import { getTextureUrl } from "../utils/blockTextures";
+import { MaterialList } from "./MaterialList";
+import { Sidebar } from "./Sidebar";
 
 class TextureErrorBoundary extends React.Component {
   constructor(props) {
@@ -28,7 +29,7 @@ class TextureErrorBoundary extends React.Component {
   }
 }
 
-function ColoredBlockInstancedMesh({ name, positions }) {
+function ColoredBlockInstancedMesh({ name, positions, maxLayer }) {
   const meshRef = useRef();
   const color = blockColors[name] || 0xff00ff; // Default pink if unknown
 
@@ -38,13 +39,19 @@ function ColoredBlockInstancedMesh({ name, positions }) {
     const tempObject = new THREE.Object3D();
 
     positions.forEach((pos, i) => {
+      // Filter visibility by Y-level efficiently via scale
+      // We keep the instance count constant to prevent flickering (unmounting/remounting)
+      const isVisible = pos.y <= maxLayer;
+      const scale = isVisible ? 1 : 0;
+
       tempObject.position.set(pos.x, pos.y, pos.z);
+      tempObject.scale.set(scale, scale, scale);
       tempObject.updateMatrix();
       meshRef.current.setMatrixAt(i, tempObject.matrix);
     });
 
     meshRef.current.instanceMatrix.needsUpdate = true;
-  }, [positions]);
+  }, [positions, maxLayer]);
 
   return (
     <instancedMesh ref={meshRef} args={[null, null, positions.length]}>
@@ -54,7 +61,7 @@ function ColoredBlockInstancedMesh({ name, positions }) {
   );
 }
 
-function TexturedBlockInstancedMesh({ name, positions }) {
+function TexturedBlockInstancedMesh({ name, positions, maxLayer }) {
   const meshRef = useRef();
 
   // We need to handle properties. 
@@ -131,6 +138,18 @@ function TexturedBlockInstancedMesh({ name, positions }) {
 
     positions.forEach((pos, i) => {
       const { x, y, z, props } = pos;
+
+      const isVisible = pos.y <= maxLayer;
+
+      if (!isVisible) {
+        // Hide by scaling to 0
+        tempObject.position.set(x, y, z); // Position doesn't strictly matter if scale is 0, but good to keep valid
+        tempObject.scale.set(0, 0, 0);
+        tempObject.updateMatrix();
+        meshRef.current.setMatrixAt(i, tempObject.matrix);
+        return;
+      }
+
       tempObject.position.set(x, y, z);
       tempObject.rotation.set(0, 0, 0);
       tempObject.scale.set(1, 1, 1);
@@ -174,7 +193,7 @@ function TexturedBlockInstancedMesh({ name, positions }) {
     });
 
     meshRef.current.instanceMatrix.needsUpdate = true;
-  }, [positions, name]);
+  }, [positions, name, maxLayer]);
 
   return (
     <instancedMesh
@@ -188,6 +207,9 @@ function TexturedBlockInstancedMesh({ name, positions }) {
 }
 
 function BlockInstancedMesh(props) {
+  // If no positions, don't render anything
+  if (!props.positions || props.positions.length === 0) return null;
+
   // Try to load texture, fallback to color while loading or on error
   return (
     <TextureErrorBoundary fallback={<ColoredBlockInstancedMesh {...props} />}>
@@ -198,8 +220,74 @@ function BlockInstancedMesh(props) {
   );
 }
 
-function SceneContent({ data }) {
-  // Process data into groups
+function SceneContent({ sceneGroups, maxLayer }) {
+  return (
+    <group>
+      {Object.keys(sceneGroups).map((name) => (
+        <BlockInstancedMesh key={name} name={name} positions={sceneGroups[name]} maxLayer={maxLayer} />
+      ))}
+    </group>
+  );
+}
+
+export function Viewer({ data }) {
+  // State for layer slicing
+  const [maxLayer, setMaxLayer] = useState(256);
+  const [minLayer, setMinLayer] = useState(0);
+  const [layerBounds, setLayerBounds] = useState({ min: 0, max: 256 });
+  const [modelCenter, setModelCenter] = useState([0, 0, 0]);
+  const [cameraPosition, setCameraPosition] = useState([50, 50, 50]);
+  const [showMaterials, setShowMaterials] = useState(false);
+
+  // Calculate Initial Bounds and Center
+  useEffect(() => {
+    if (!data || !data.regions) return;
+
+    let minX = Infinity, minY = Infinity, minZ = Infinity;
+    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+
+    Object.values(data.regions).forEach((region) => {
+      const ox = region.position.x;
+      const oy = region.position.y;
+      const oz = region.position.z;
+
+      region.blocks.forEach((block) => {
+        const x = ox + block.x;
+        const y = oy + block.y;
+        const z = oz + block.z;
+
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        minZ = Math.min(minZ, z);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+        maxZ = Math.max(maxZ, z);
+      });
+    });
+
+    // If no blocks found (unlikely), default
+    if (minX === Infinity) {
+      setLayerBounds({ min: -64, max: 320 });
+      return;
+    }
+
+    setLayerBounds({ min: minY, max: maxY });
+    setMaxLayer(maxY); // Start showing everything
+    setMinLayer(minY);
+
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const centerZ = (minZ + maxZ) / 2;
+    setModelCenter([centerX, centerY, centerZ]);
+
+    // Set camera to look at center from a reasonable distance
+    const maxDim = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
+    const dist = maxDim * 1.5 + 20;
+    setCameraPosition([centerX + dist, centerY + dist / 2, centerZ + dist]);
+
+  }, [data]);
+
+  // Process data into groups ONCE (not dependent on maxLayer)
   const groups = useMemo(() => {
     const g = {};
     const allRegions = data.regions;
@@ -210,63 +298,68 @@ function SceneContent({ data }) {
       const oz = region.position.z;
 
       region.blocks.forEach((block) => {
+        const absY = oy + block.y;
+
+        // We do NOT filter here anymore. We pass everything down to the mesh directly.
+        // if (absY > maxLayer) return;  <-- REMOVED
+
         const key = block.name;
         if (!g[key]) g[key] = [];
 
         g[key].push({
           x: ox + block.x,
-          y: oy + block.y,
+          y: absY,
           z: oz + block.z,
           props: block.props,
         });
       });
     });
     return g;
-  }, [data]);
+  }, [data]); // Removed maxLayer dependency
+
+
+  const handleScreenshot = () => {
+    const canvas = document.querySelector("canvas");
+    if (canvas) {
+      const link = document.createElement("a");
+      link.download = "litematica_render.png";
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    }
+  };
 
   return (
-    <group>
-      <Center>
-        {Object.keys(groups).map((name) => (
-          <BlockInstancedMesh key={name} name={name} positions={groups[name]} />
-        ))}
-      </Center>
-    </group>
-  );
-}
-
-export function Viewer({ data }) {
-  return (
-    <div style={{ width: "100vw", height: "100vh", background: "#111" }}>
-      <Canvas camera={{ position: [50, 50, 50], fov: 50 }}>
+    <div style={{ width: "100vw", height: "100vh", background: "#111", position: 'relative' }}>
+      <Canvas
+        camera={{ position: cameraPosition, fov: 50 }}
+        gl={{ preserveDrawingBuffer: true }}
+      >
         <ambientLight intensity={0.6} />
         <directionalLight position={[10, 20, 10]} intensity={1} castShadow />
         <pointLight position={[-10, -10, -10]} intensity={0.5} />
 
         <Suspense fallback={null}>
-          <SceneContent data={data} />
+          <SceneContent sceneGroups={groups} maxLayer={maxLayer} />
         </Suspense>
 
-        <OrbitControls makeDefault />
+        <OrbitControls makeDefault target={modelCenter} />
         <Environment preset="city" />
       </Canvas>
 
-      <div
-        style={{
-          position: "absolute",
-          top: "10px",
-          left: "10px",
-          color: "white",
-          background: "rgba(0,0,0,0.5)",
-          padding: "10px",
-          borderRadius: "5px",
-          pointerEvents: "none",
-        }}
-      >
-        <p>Left Click: Rotate</p>
-        <p>Right Click: Pan</p>
-        <p>Scroll: Zoom</p>
-      </div>
+      <Sidebar
+        maxLayer={maxLayer}
+        setMaxLayer={setMaxLayer}
+        layerBounds={layerBounds}
+        onToggleMaterials={() => setShowMaterials(!showMaterials)}
+        showMaterials={showMaterials}
+        onScreenshot={handleScreenshot}
+      />
+
+      {/* Render Material List separately if needed, or Sidebar could handle it. 
+          For now dragging it from Sidebar might be tricky if it's separate. 
+          Let's render it here as before for max flexibility. 
+       */}
+      {showMaterials && <MaterialList data={data} onClose={() => setShowMaterials(false)} />}
     </div>
   );
 }
