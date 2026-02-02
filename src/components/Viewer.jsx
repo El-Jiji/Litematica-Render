@@ -1,5 +1,6 @@
 import React, { useMemo, useEffect, useRef, Suspense, useState } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
 import {
   OrbitControls,
   Environment,
@@ -30,7 +31,7 @@ class TextureErrorBoundary extends React.Component {
   }
 }
 
-function ColoredBlockInstancedMesh({ name, positions, maxLayer }) {
+function ColoredBlockInstancedMesh({ name, positions, maxLayer, wireframeMode, xrayMode }) {
   const meshRef = useRef();
   const color = blockColors[name] || 0xff00ff; // Default pink if unknown
 
@@ -57,12 +58,17 @@ function ColoredBlockInstancedMesh({ name, positions, maxLayer }) {
   return (
     <instancedMesh ref={meshRef} args={[null, null, positions.length]}>
       <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial color={color} />
+      <meshStandardMaterial
+        color={color}
+        wireframe={wireframeMode}
+        transparent={xrayMode}
+        opacity={xrayMode ? 0.3 : 1.0}
+      />
     </instancedMesh>
   );
 }
 
-function TexturedBlockInstancedMesh({ name, positions, maxLayer }) {
+function TexturedBlockInstancedMesh({ name, positions, maxLayer, wireframeMode, xrayMode }) {
   const meshRef = useRef();
 
   // We need to handle properties. 
@@ -105,9 +111,11 @@ function TexturedBlockInstancedMesh({ name, positions, maxLayer }) {
       name.includes("trapdoor");
 
     const matProps = {
-      transparent: isTransparent,
+      transparent: isTransparent || xrayMode,
       alphaTest: isTransparent ? 0.5 : 0,
       side: isTransparent ? THREE.DoubleSide : THREE.FrontSide,
+      wireframe: wireframeMode,
+      opacity: xrayMode ? 0.3 : 1.0,
     };
 
     const matSide = new THREE.MeshStandardMaterial({
@@ -130,7 +138,7 @@ function TexturedBlockInstancedMesh({ name, positions, maxLayer }) {
       matSide, // Front
       matSide, // Back
     ];
-  }, [topTex, bottomTex, sideTex, name]);
+  }, [topTex, bottomTex, sideTex, name, wireframeMode, xrayMode]);
 
   useEffect(() => {
     if (!meshRef.current) return;
@@ -207,28 +215,44 @@ function TexturedBlockInstancedMesh({ name, positions, maxLayer }) {
   );
 }
 
-function BlockInstancedMesh(props) {
-  // If no positions, don't render anything
-  if (!props.positions || props.positions.length === 0) return null;
+function BlockInstancedMesh({ name, positions, maxLayer, wireframeMode, xrayMode }) {
+  if (!positions || positions.length === 0) return null;
 
-  // Try to load texture, fallback to color while loading or on error
-  return (
-    <TextureErrorBoundary fallback={<ColoredBlockInstancedMesh {...props} />}>
-      <Suspense fallback={<ColoredBlockInstancedMesh {...props} />}>
-        <TexturedBlockInstancedMesh {...props} />
-      </Suspense>
-    </TextureErrorBoundary>
-  );
+  const hasTexture = getTextureUrl(name, 'top') !== null;
+
+  if (hasTexture) {
+    return (
+      <TextureErrorBoundary fallback={<ColoredBlockInstancedMesh name={name} positions={positions} maxLayer={maxLayer} wireframeMode={wireframeMode} xrayMode={xrayMode} />}>
+        <Suspense fallback={<ColoredBlockInstancedMesh name={name} positions={positions} maxLayer={maxLayer} wireframeMode={wireframeMode} xrayMode={xrayMode} />}>
+          <TexturedBlockInstancedMesh name={name} positions={positions} maxLayer={maxLayer} wireframeMode={wireframeMode} xrayMode={xrayMode} />
+        </Suspense>
+      </TextureErrorBoundary>
+    );
+  } else {
+    return <ColoredBlockInstancedMesh name={name} positions={positions} maxLayer={maxLayer} wireframeMode={wireframeMode} xrayMode={xrayMode} />;
+  }
 }
 
-function SceneContent({ sceneGroups, maxLayer }) {
+function SceneContent({ sceneGroups, maxLayer, wireframeMode, xrayMode }) {
   return (
     <group>
       {Object.keys(sceneGroups).map((name) => (
-        <BlockInstancedMesh key={name} name={name} positions={sceneGroups[name]} maxLayer={maxLayer} />
+        <BlockInstancedMesh key={name} name={name} positions={sceneGroups[name]} maxLayer={maxLayer} wireframeMode={wireframeMode} xrayMode={xrayMode} />
       ))}
     </group>
   );
+}
+// Camera controller component to handle camera position updates
+function CameraController({ position, target }) {
+  const { camera } = useThree();
+
+  useEffect(() => {
+    if (position) {
+      camera.position.set(position[0], position[1], position[2]);
+    }
+  }, [position, camera]);
+
+  return null;
 }
 
 export function Viewer({ data }) {
@@ -239,6 +263,30 @@ export function Viewer({ data }) {
   const [modelCenter, setModelCenter] = useState([0, 0, 0]);
   const [cameraPosition, setCameraPosition] = useState([50, 50, 50]);
   const [showMaterials, setShowMaterials] = useState(false);
+
+  // Session 1: New state
+  const [modelDimensions, setModelDimensions] = useState({ width: 0, height: 0, depth: 0 });
+  const [modelBounds, setModelBounds] = useState({ minX: 0, maxX: 0, minY: 0, maxY: 0, minZ: 0, maxZ: 0 });
+  const [autoRotate, setAutoRotate] = useState(false);
+  const controlsRef = useRef();
+
+  // Session 2: Visual enhancements state
+  const [ambientIntensity, setAmbientIntensity] = useState(0.6);
+  const [directionalIntensity, setDirectionalIntensity] = useState(1.0);
+  const [environmentPreset, setEnvironmentPreset] = useState('city');
+  const [shadowsEnabled, setShadowsEnabled] = useState(true);
+  const [wireframeMode, setWireframeMode] = useState(false);
+  const [theme, setTheme] = useState('dark'); // 'dark' or 'light'
+
+  // Session 3: Export & Animation state
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [animationSpeed, setAnimationSpeed] = useState(50); // ms per layer
+  const sceneRef = useRef();
+
+  // Session 4: History, X-Ray, and UX
+  const [xrayMode, setXrayMode] = useState(false);
+  const [recentFiles, setRecentFiles] = useState([]);
+  const [showRecentFiles, setShowRecentFiles] = useState(false);
 
   // Calculate Initial Bounds and Center
   useEffect(() => {
@@ -257,36 +305,114 @@ export function Viewer({ data }) {
         const y = oy + block.y;
         const z = oz + block.z;
 
-        minX = Math.min(minX, x);
-        minY = Math.min(minY, y);
-        minZ = Math.min(minZ, z);
-        maxX = Math.max(maxX, x);
-        maxY = Math.max(maxY, y);
-        maxZ = Math.max(maxZ, z);
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+        if (z < minZ) minZ = z;
+        if (z > maxZ) maxZ = z;
       });
     });
-
-    // If no blocks found (unlikely), default
-    if (minX === Infinity) {
-      setLayerBounds({ min: -64, max: 320 });
-      return;
-    }
-
-    setLayerBounds({ min: minY, max: maxY });
-    setMaxLayer(maxY); // Start showing everything
-    setMinLayer(minY);
 
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;
     const centerZ = (minZ + maxZ) / 2;
     setModelCenter([centerX, centerY, centerZ]);
 
+    setLayerBounds({ min: minY, max: maxY });
+    setMaxLayer(maxY);
+
+    // Session 1: Calculate dimensions
+    const width = maxX - minX + 1;
+    const height = maxY - minY + 1;
+    const depth = maxZ - minZ + 1;
+    setModelDimensions({ width, height, depth });
+    setModelBounds({ minX, maxX, minY, maxY, minZ, maxZ });
+
+    // Session 4: Save to recent files
+    if (data.metadata?.Name) {
+      saveToRecentFiles({
+        name: data.metadata.Name.value || 'Unnamed',
+        timestamp: Date.now(),
+        dimensions: { width, height, depth }
+      });
+    }
+
     // Set camera to look at center from a reasonable distance
     const maxDim = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
     const dist = maxDim * 1.5 + 20;
     setCameraPosition([centerX + dist, centerY + dist / 2, centerZ + dist]);
-
   }, [data]);
+
+  // Session 4: Load recent files from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem('litematica_recent_files');
+    if (stored) {
+      try {
+        setRecentFiles(JSON.parse(stored));
+      } catch (e) {
+        console.error('Failed to parse recent files:', e);
+      }
+    }
+  }, []);
+
+  // Session 4: Save to recent files
+  const saveToRecentFiles = (fileInfo) => {
+    setRecentFiles(prev => {
+      const filtered = prev.filter(f => f.name !== fileInfo.name);
+      const updated = [fileInfo, ...filtered].slice(0, 10); // Keep last 10
+      localStorage.setItem('litematica_recent_files', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  // Session 4: Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      // Ignore if typing in input
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      switch (e.key.toLowerCase()) {
+        case 'w':
+          setWireframeMode(prev => !prev);
+          break;
+        case 'x':
+          setXrayMode(prev => !prev);
+          break;
+        case 'r':
+          setAutoRotate(prev => !prev);
+          break;
+        case 's':
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            handleScreenshot();
+          }
+          break;
+        case ' ':
+          e.preventDefault();
+          toggleBuildAnimation();
+          break;
+        case '1':
+          setCameraPreset('front');
+          break;
+        case '2':
+          setCameraPreset('side');
+          break;
+        case '3':
+          setCameraPreset('top');
+          break;
+        case '4':
+          setCameraPreset('isometric');
+          break;
+        default:
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, []);
+
 
   // Process data into groups ONCE (not dependent on maxLayer)
   const groups = useMemo(() => {
@@ -329,6 +455,144 @@ export function Viewer({ data }) {
     }
   };
 
+  // Session 3: Multiple screenshot export
+  const handleMultipleScreenshots = async () => {
+    const presets = ['front', 'side', 'top', 'isometric'];
+    const canvas = document.querySelector("canvas");
+    if (!canvas) return;
+
+    for (let i = 0; i < presets.length; i++) {
+      setCameraPreset(presets[i]);
+      // Wait for camera to update
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      const link = document.createElement("a");
+      link.download = `litematica_${presets[i]}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+
+      // Small delay between downloads
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+  };
+
+  // Session 3: Export to 3D formats
+  const handleExport3D = (format) => {
+    if (!sceneRef.current) return;
+
+    if (format === 'gltf') {
+      const exporter = new GLTFExporter();
+      exporter.parse(
+        sceneRef.current,
+        (gltf) => {
+          const output = JSON.stringify(gltf, null, 2);
+          const blob = new Blob([output], { type: 'application/json' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = 'litematica_model.gltf';
+          link.click();
+        },
+        (error) => {
+          console.error('GLTF export error:', error);
+        },
+        { binary: false }
+      );
+    } else if (format === 'obj') {
+      // Simple OBJ export (vertices only)
+      let objContent = '# Litematica Model Export\n';
+
+      sceneRef.current.traverse((child) => {
+        if (child.isInstancedMesh) {
+          const geometry = child.geometry;
+          const positions = geometry.attributes.position.array;
+          const matrix = new THREE.Matrix4();
+
+          for (let i = 0; i < child.count; i++) {
+            child.getMatrixAt(i, matrix);
+            const position = new THREE.Vector3();
+            position.setFromMatrixPosition(matrix);
+
+            // Skip if scale is 0 (hidden)
+            const scale = new THREE.Vector3();
+            scale.setFromMatrixScale(matrix);
+            if (scale.x === 0) continue;
+
+            // Add vertices for this instance
+            for (let j = 0; j < positions.length; j += 3) {
+              const x = positions[j] + position.x;
+              const y = positions[j + 1] + position.y;
+              const z = positions[j + 2] + position.z;
+              objContent += `v ${x} ${y} ${z}\n`;
+            }
+          }
+        }
+      });
+
+      const blob = new Blob([objContent], { type: 'text/plain' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'litematica_model.obj';
+      link.click();
+    }
+  };
+
+  // Session 3: Build animation
+  useEffect(() => {
+    if (!isAnimating) return;
+
+    const interval = setInterval(() => {
+      setMaxLayer(prev => {
+        if (prev >= layerBounds.max) {
+          setIsAnimating(false);
+          return layerBounds.max;
+        }
+        return prev + 1;
+      });
+    }, animationSpeed);
+
+    return () => clearInterval(interval);
+  }, [isAnimating, animationSpeed, layerBounds.max]);
+
+  const toggleBuildAnimation = () => {
+    if (isAnimating) {
+      setIsAnimating(false);
+    } else {
+      setMaxLayer(layerBounds.min);
+      setIsAnimating(true);
+    }
+  };
+  const setCameraPreset = (preset) => {
+    const { minX, maxX, minY, maxY, minZ, maxZ } = modelBounds;
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const centerZ = (minZ + maxZ) / 2;
+    const maxDim = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
+    const dist = maxDim * 1.8;
+
+    let newPos;
+    switch (preset) {
+      case 'front':
+        newPos = [centerX, centerY, centerZ + dist];
+        break;
+      case 'side':
+        newPos = [centerX + dist, centerY, centerZ];
+        break;
+      case 'top':
+        newPos = [centerX, centerY + dist, centerZ];
+        break;
+      case 'isometric':
+        newPos = [centerX + dist * 0.7, centerY + dist * 0.7, centerZ + dist * 0.7];
+        break;
+      default:
+        return;
+    }
+
+    setCameraPosition(newPos);
+    if (controlsRef.current) {
+      controlsRef.current.target.set(centerX, centerY, centerZ);
+    }
+  };
+
   return (
     <div style={{ width: "100vw", height: "100vh", background: "#000", position: 'relative', overflow: 'hidden' }}>
 
@@ -353,16 +617,25 @@ export function Viewer({ data }) {
         gl={{ preserveDrawingBuffer: true, alpha: true }}
         style={{ position: 'relative', zIndex: 1 }}
       >
-        <ambientLight intensity={0.6} />
-        <directionalLight position={[10, 20, 10]} intensity={1} castShadow />
+        <ambientLight intensity={ambientIntensity} />
+        <directionalLight
+          position={[10, 20, 10]}
+          intensity={directionalIntensity}
+          castShadow={shadowsEnabled}
+          shadow-mapSize-width={shadowsEnabled ? 2048 : 512}
+          shadow-mapSize-height={shadowsEnabled ? 2048 : 512}
+        />
         <pointLight position={[-10, -10, -10]} intensity={0.5} />
 
         <Suspense fallback={null}>
-          <SceneContent sceneGroups={groups} maxLayer={maxLayer} />
+          <group ref={sceneRef}>
+            <SceneContent sceneGroups={groups} maxLayer={maxLayer} wireframeMode={wireframeMode} xrayMode={xrayMode} />
+          </group>
         </Suspense>
 
-        <OrbitControls makeDefault target={modelCenter} />
-        <Environment preset="city" />
+        <CameraController position={cameraPosition} target={modelCenter} />
+        <OrbitControls ref={controlsRef} makeDefault target={modelCenter} autoRotate={autoRotate} autoRotateSpeed={4.0} />
+        <Environment preset={environmentPreset} />
       </Canvas>
 
       <Sidebar
@@ -372,6 +645,34 @@ export function Viewer({ data }) {
         onToggleMaterials={() => setShowMaterials(!showMaterials)}
         showMaterials={showMaterials}
         onScreenshot={handleScreenshot}
+        modelDimensions={modelDimensions}
+        metadata={data?.metadata || {}}
+        onCameraPreset={setCameraPreset}
+        autoRotate={autoRotate}
+        onToggleAutoRotate={() => setAutoRotate(!autoRotate)}
+        ambientIntensity={ambientIntensity}
+        setAmbientIntensity={setAmbientIntensity}
+        directionalIntensity={directionalIntensity}
+        setDirectionalIntensity={setDirectionalIntensity}
+        environmentPreset={environmentPreset}
+        setEnvironmentPreset={setEnvironmentPreset}
+        shadowsEnabled={shadowsEnabled}
+        setShadowsEnabled={setShadowsEnabled}
+        wireframeMode={wireframeMode}
+        setWireframeMode={setWireframeMode}
+        theme={theme}
+        setTheme={setTheme}
+        onMultipleScreenshots={handleMultipleScreenshots}
+        onExport3D={handleExport3D}
+        isAnimating={isAnimating}
+        onToggleBuildAnimation={toggleBuildAnimation}
+        animationSpeed={animationSpeed}
+        setAnimationSpeed={setAnimationSpeed}
+        xrayMode={xrayMode}
+        setXrayMode={setXrayMode}
+        recentFiles={recentFiles}
+        showRecentFiles={showRecentFiles}
+        setShowRecentFiles={setShowRecentFiles}
       />
 
       {/* Render Material List separately if needed, or Sidebar could handle it. 
