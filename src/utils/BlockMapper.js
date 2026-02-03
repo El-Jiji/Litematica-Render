@@ -55,21 +55,41 @@ export class BlockMapper {
     }
 
     // List of suffixes to strip to find the "base" block
-    // Order matters: longer suffixes checks first to avoid partial matches (e.g. _wall_sign vs _sign)
     const DERIVED_SUFFIXES = [
       "_stairs", "_slab", "_wall_sign", "_wall", "_fence_gate", "_fence", 
       "_button", "_pressure_plate", "_hanging_sign", "_sign",
-      "_brick_wall", "_wood", "_carpet" 
+      "_brick_wall", "_wood", "_carpet", "_bars", "_lantern", "_chain", "_rod",
+      "_wall_torch", "_torch"
+    ];
+
+    // Blocks that only have a single texture and NEVER use _top/_bottom suffixes
+    const SINGLE_TEXTURE_BASES = [
+      "wool", "planks", "concrete", "concrete_powder", "terracotta", "glass", 
+      "stained_glass", "bricks", "ore", "leaves", "sapling", "fan", "coral", 
+      "tnt", "amethyst_block", "copper_block", "raw_iron_block", "raw_gold_block",
+      "raw_copper_block", "netherite_block", "diamond_block", "gold_block", 
+      "iron_block", "emerald_block", "lapis_block", "coal_block", "moss_block",
+      "mud_bricks", "tuff_bricks", "prismarine_bricks", "quartz_bricks"
     ];
 
     // Simple stripping
     for (const suffix of DERIVED_SUFFIXES) {
         if (name.endsWith(suffix)) {
-             name = name.substring(0, name.length - suffix.length);
+             const baseName = name.substring(0, name.length - suffix.length);
              
-             // Special handling: oak_fence -> oak_planks, not oak
-             if (suffix === '_fence' || suffix === '_fence_gate' || suffix === '_sign' || suffix === '_hanging_sign' || suffix === '_wall_sign' || suffix === '_stairs' || suffix === '_slab') {
-                if (!name.endsWith('_planks') && !name.includes('_log') && !name.includes('_stem') && !name.includes('_hyphae') && !name.endsWith('_brick') && !name.endsWith('_bricks')) {
+             // Special handling: _wood -> _log
+             if (suffix === '_wood') {
+                  name = baseName.includes('_log') ? baseName : baseName + '_log';
+                  const barkMapping = this.mappings[`minecraft:${name}`];
+                  if (barkMapping?.sides?.side) return barkMapping.sides.side;
+                  return name;
+             }
+
+             name = baseName;
+
+             // Wood mapping (stairs, slabs, fences to planks)
+             if (['_fence', '_fence_gate', '_sign', '_hanging_sign', '_wall_sign', '_stairs', '_slab'].includes(suffix)) {
+                if (!name.endsWith('_planks') && !name.includes('_log') && !name.includes('_stem') && !name.includes('_hyphae') && !name.endsWith('_bricks')) {
                    const woodTypes = ['oak', 'spruce', 'birch', 'jungle', 'acacia', 'dark_oak', 'mangrove', 'cherry', 'bamboo', 'crimson', 'warped', 'pale_oak'];
                    if (woodTypes.includes(name)) {
                        name += '_planks';
@@ -77,111 +97,63 @@ export class BlockMapper {
                 }
              }
              
-             // Special handling: _wood -> _log (6-sided bark)
-             // We want this to resolve to just the base name (which will map to side/all texture)
-             // But BlockMapper's default heuristic for 'top' is to append '_top' if it doesn't match an explicit face mapping.
-             // So we need to ensure it hits a mapping, OR we force the face logic.
-             if (suffix === '_wood') {
-                 if (!name.includes('_log')) {
-                    name += '_log';
-                 }
-                 // If we have mapped it to a log, it will have sides.
-                 // But wait, "acacia_wood" means "acacia_log" texture on ALL sides.
-                 // If we map to "acacia_log", that has a top/bottom.
-                 // We may need an explicit "acacia_wood" mapping in JSON or special handling here.
-                 // For now, let's assume if it is wood, we want the side texture.
-                 return name; // Return early? No, need to check mappings.
-             }
-
-             // Special handling: _carpet -> _wool
-             if (suffix === '_carpet') {
-                 if (name !== 'moss') {
-                    name += '_wool';
-                 }
+             if (suffix === '_carpet' && name !== 'moss') {
+                name += '_wool';
              }
 
              break;
         }
     }
     
-    // Normalize singular brick -> plural bricks (common in naming conventions)
-    if (name.endsWith('_brick')) {
+    // Normalize singular brick -> plural bricks
+    if (name.endsWith('_brick') && !name.endsWith('nether_brick') && name !== 'mud_brick') {
         name += 's';
     }
+    if (name === 'nether_brick') name = 'nether_bricks';
+    if (name === 'mud_brick') name = 'mud_bricks';
     
-    // Generic fallback for common complex blocks if specific mapping not found
-    if (name.includes('_bed')) {
-        return name.replace('_bed', '_wool'); // Visual fallback
-    }
-    if (name.includes('_banner')) {
-        if (name.includes('wall_banner')) {
-             return name.replace('_wall_banner', '_wool');
-        }
-        return name.replace('_banner', '_wool');
-    }
-    if (name.includes('head') || name.includes('skull')) {
-         // Try to map to a head texture if possible, but heads are entities.
-         // Let's rely on explicit mappings in JSON for heads.
-    }
-    if (name.includes('candle_cake')) {
-        return 'cake_top'; // Best visual match
-    }
+    // Generic fallbacks
+    if (name.includes('_bed')) return name.replace('_bed', '_wool');
+    if (name.includes('_banner')) return name.replace('_wall_banner', '_wool').replace('_banner', '_wool');
+    if (name.includes('candle_cake')) return 'cake_top';
+    if (name.includes('petrified_oak')) return 'oak_planks';
     
-    // Check if the stripped name exists in mappings
-    const baseMapping = this.mappings[`minecraft:${name}`];
-    if (baseMapping) {
-        // Special case for WOOD: if original had _wood specific suffix, we likely want the SIDE texture of the log on all faces.
-        if (blockName.endsWith('_wood')) {
-             if (baseMapping.sides && baseMapping.sides['side']) {
-                 return baseMapping.sides['side'];
-             }
-        }
-        
-        if (typeof baseMapping.texture === 'string') {
-            return baseMapping.texture;
-        }
-        if (baseMapping.sides) {
-             // If we are here, we are likely a derived block acting like the base block.
-             // We should respect the base block's face mapping.
-            if (baseMapping.sides[face]) {
-                return baseMapping.sides[face];
-            }
-            if (face === 'side' && baseMapping.sides['north']) {
-                 return baseMapping.sides['north'];
-            }
-        }
-    }
-    
-    // Potted plant special handling: 
-    // potted_oak_sapling -> oak_sapling. oak_sapling usually has a texture "oak_sapling".
-    // But default heuristic adds _top?
-    // We should check if the stripped name exists as a texture first?
-    // Or just forcing it.
-    if (blockName.startsWith('minecraft:potted_')) {
-        return name;
-    }
+    // Check if the name matches a single texture base
+    const isSingleTexture = SINGLE_TEXTURE_BASES.some(base => name.endsWith(base));
 
-    // Heuristic: If it ends in specific suffixes, usually name.png
-    if (SINGLE_TEXTURE_SUFFIXES.some(s => name.endsWith(s))) {
-        return name;
+    // Check if the name exists in mappings
+    const finalMapping = this.mappings[`minecraft:${name}`];
+    if (finalMapping) {
+        if (typeof finalMapping.texture === 'string') return finalMapping.texture;
+        if (finalMapping.sides) {
+            if (finalMapping.sides[face]) return finalMapping.sides[face];
+            if (face === 'side' && finalMapping.sides['north']) return finalMapping.sides['north'];
+            
+            // If top/bottom requested but not found, check if it's a single texture block
+            if (isSingleTexture && finalMapping.sides['side']) return finalMapping.sides['side'];
+            
+            // Fallback to 'side' or first available
+            if ((face === 'top' || face === 'bottom') && finalMapping.sides['side']) return finalMapping.sides['side'];
+        }
     }
-
-    // Heuristic: If we are asking for top/bottom, try name_top / name_bottom
-    // BUT only if not already mapped or if generic fallback is needed.
-    // If we stripped a suffix (e.g. diorite_stairs -> diorite), we want diorite.png, NOT diorite_top.png
-    // UNLESS diorite has a top texture?
-    // Let's rely on the fact that if we stripped, we probably want the base block texture.
     
+    if (blockName.startsWith('minecraft:potted_')) return name;
+
+    // Heuristic for logs/stems that are not in mappings but requested as top/bottom
     if (face === 'top' || face === 'bottom') {
-         // Check if a specific top/bottom texture exists for this name? 
-         // We can't check file existence here easily (no fs).
-         // So we will optimistically return name+suffix if we didn't strip?
-         // Or just return it and let the resolver fail and retry?
-         return `${name}_${face}`;
+         if (isSingleTexture) return name;
+
+         const logTypes = ['oak', 'spruce', 'birch', 'jungle', 'acacia', 'dark_oak', 'mangrove', 'cherry', 'pale_oak', 'crimson', 'warped'];
+         for (const log of logTypes) {
+             if (name === log || name === `${log}_log` || name === `${log}_stem`) {
+                 const base = name.includes('_log') || name.includes('_stem') ? name : (log === 'crimson' || log === 'warped' ? `${log}_stem` : `${log}_log`);
+                 return `${base}_top`;
+             }
+         }
+         return `${name}_top`; 
     }
 
-
-    // Default to the block name itself
+    // Default
     return name;
   }
 }

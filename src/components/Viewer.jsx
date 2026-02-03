@@ -56,7 +56,7 @@ function ColoredBlockInstancedMesh({ name, positions, maxLayer, wireframeMode, x
   }, [positions, maxLayer]);
 
   return (
-    <instancedMesh ref={meshRef} args={[null, null, positions.length]}>
+    <instancedMesh ref={meshRef} args={[null, null, positions.length]} frustumCulled={false}>
       <boxGeometry args={[1, 1, 1]} />
       <meshStandardMaterial
         color={color}
@@ -209,6 +209,7 @@ function TexturedBlockInstancedMesh({ name, positions, maxLayer, wireframeMode, 
       ref={meshRef}
       args={[null, null, positions.length]}
       material={materials}
+      frustumCulled={false}
     >
       <boxGeometry args={[1, 1, 1]} />
     </instancedMesh>
@@ -613,7 +614,7 @@ export function Viewer({ data }) {
       />
 
       <Canvas
-        camera={{ position: cameraPosition, fov: 50, near: 0.1, far: 10000 }}
+        camera={{ position: cameraPosition, fov: 50, near: 0.01, far: 10000 }}
         gl={{ preserveDrawingBuffer: true, alpha: true }}
         style={{ position: 'relative', zIndex: 1 }}
       >
