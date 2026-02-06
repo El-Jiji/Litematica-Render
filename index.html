@@ -35,7 +35,43 @@
     </script>
   </head>
   <body>
+    <header style="padding:16px; text-align:center; color:#111; background:#f5f5f5; font-family:system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif">
+      <h1 style="margin:0; font-size:1.5rem">Visor web de archivos Litematica (.litematic)</h1>
+      <p style="margin:8px 0 0; font-size:0.95rem">Sube o arrastra tu archivo .litematic para renderizar tu esquema de Minecraft en 3D.</p>
+    </header>
     <div id="root"></div>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "¿Cómo visualizar archivos .litematic en línea?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Arrastra tu archivo .litematic a la página o selecciónalo desde tu dispositivo. El visor renderiza el esquema en 3D directamente en el navegador."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Es compatible con Litematica?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Sí. El visor interpreta el formato .litematic utilizado por el mod Litematica para mostrar bloques y materiales."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Necesito instalar algo?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. Todo ocurre en el navegador; únicamente necesitas tu archivo .litematic para visualizarlo."
+            }
+          }
+        ]
+      }
+    </script>
     <script type="module">
       (async () => {
         try {
