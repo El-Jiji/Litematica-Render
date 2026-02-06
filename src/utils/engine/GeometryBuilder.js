@@ -97,10 +97,6 @@ export class GeometryBuilder {
             const ah = av2 - av1;
 
             // Element local UVs (0-16)
-            const lu1 = uv[0] / 16;
-            const lv1 = uv[1] / 16;
-            const lu2 = uv[2] / 16;
-            const lv2 = uv[3] / 16;
 
             // Map local to atlas
             // NOTE: Minecraft UVs are [x1, y1, x2, y2]

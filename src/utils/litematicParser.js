@@ -9,7 +9,7 @@ export const parseLitematic = async (file) => {
   let unzipped;
   try {
     unzipped = pako.ungzip(uint8Array);
-  } catch (e) {
+  } catch {
     console.warn("File not gzipped, using raw buffer");
     unzipped = uint8Array;
   }

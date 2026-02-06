@@ -94,12 +94,10 @@ class AssetLoader {
     ];
 
     let data = null;
-    let foundId = null;
 
     for (const pid of possibleIds) {
       if (this.models[pid]) {
         data = JSON.parse(JSON.stringify(this.models[pid])); // Deep clone to avoid mutating cache
-        foundId = pid;
         break;
       }
     }

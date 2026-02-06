@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React from "react";
 
 // I'll use native events to avoid extra deps if possible, or just install react-dropzone.
 // Native is easy.

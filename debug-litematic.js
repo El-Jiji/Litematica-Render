@@ -1,9 +1,8 @@
 import * as nbt from "prismarine-nbt";
 import fs from "fs";
 import pako from "pako";
-import { promisify } from "util";
+import { Buffer } from "buffer";
 
-const parseNbt = promisify(nbt.parse);
 
 async function debugFile() {
   const filePath = "./debug.litematic";
@@ -20,7 +19,7 @@ async function debugFile() {
   let unzipped;
   try {
     unzipped = pako.ungzip(buffer);
-  } catch (e) {
+  } catch {
     console.log("No es GZIP, usando raw buffer");
     unzipped = buffer;
   }

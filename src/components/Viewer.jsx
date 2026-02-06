@@ -1,14 +1,11 @@
-import React, { useMemo, useEffect, useRef, Suspense, useState } from "react";
+import React, { useMemo, useEffect, useRef, Suspense, useState, useCallback } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
 import {
   OrbitControls,
   Environment,
-  useTexture,
 } from "@react-three/drei";
 import * as THREE from "three";
-import { blockColors } from "../utils/blockColors";
-import { getTextureUrl } from "../utils/blockTextures";
 import { MaterialList } from "./MaterialList";
 import { Sidebar } from "./Sidebar";
 import bgImage from "../assets/bg.png";
@@ -73,7 +70,7 @@ function V2BlockInstancedMesh({ geometry, material, positions, maxLayer }) {
   );
 }
 
-function SceneContent({ sceneGroups, maxLayer, wireframeMode, xrayMode }) {
+function SceneContent({ sceneGroups, maxLayer }) {
   const [v2Groups, setV2Groups] = useState([]);
 
   useEffect(() => {
@@ -147,7 +144,7 @@ function SceneContent({ sceneGroups, maxLayer, wireframeMode, xrayMode }) {
   );
 }
 // Camera controller component to handle camera position updates
-function CameraController({ position, target }) {
+function CameraController({ position }) {
   const { camera } = useThree();
 
   useEffect(() => {
@@ -162,7 +159,6 @@ function CameraController({ position, target }) {
 export function Viewer({ data }) {
   // State for layer slicing
   const [maxLayer, setMaxLayer] = useState(256);
-  const [minLayer, setMinLayer] = useState(0);
   const [layerBounds, setLayerBounds] = useState({ min: 0, max: 256 });
   const [modelCenter, setModelCenter] = useState([0, 0, 0]);
   const [cameraPosition, setCameraPosition] = useState([50, 50, 50]);
@@ -258,7 +254,7 @@ export function Viewer({ data }) {
         console.error('Failed to parse recent files:', e);
       }
     }
-  }, []);
+  }, [toggleBuildAnimation, setCameraPreset]);
 
   // Session 4: Save to recent files
   const saveToRecentFiles = (fileInfo) => {
@@ -315,7 +311,7 @@ export function Viewer({ data }) {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, []);
+  }, [toggleBuildAnimation, setCameraPreset]);
 
 
   // Process data into groups ONCE (not dependent on maxLayer)
@@ -457,15 +453,15 @@ export function Viewer({ data }) {
     return () => clearInterval(interval);
   }, [isAnimating, animationSpeed, layerBounds.max]);
 
-  const toggleBuildAnimation = () => {
+  const toggleBuildAnimation = useCallback(() => {
     if (isAnimating) {
       setIsAnimating(false);
     } else {
       setMaxLayer(layerBounds.min);
       setIsAnimating(true);
     }
-  };
-  const setCameraPreset = (preset) => {
+  }, [isAnimating, layerBounds.min]);
+  const setCameraPreset = useCallback((preset) => {
     const { minX, maxX, minY, maxY, minZ, maxZ } = modelBounds;
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;
@@ -495,7 +491,7 @@ export function Viewer({ data }) {
     if (controlsRef.current) {
       controlsRef.current.target.set(centerX, centerY, centerZ);
     }
-  };
+  }, [modelBounds, controlsRef]);
 
   return (
     <div style={{ width: "100vw", height: "100vh", background: "#000", position: 'relative', overflow: 'hidden' }}>
@@ -533,7 +529,7 @@ export function Viewer({ data }) {
 
         <Suspense fallback={null}>
           <group ref={sceneRef}>
-            <SceneContent sceneGroups={groups} maxLayer={maxLayer} wireframeMode={wireframeMode} xrayMode={xrayMode} />
+            <SceneContent sceneGroups={groups} maxLayer={maxLayer} />
           </group>
         </Suspense>
 

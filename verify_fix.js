@@ -16,7 +16,7 @@ class BlockMapper {
     this.mappings = blockMappings;
   }
 
-  getTexture(blockName, face, props = {}) {
+  getTexture(blockName, face) {
     // 1. Check strict mapping
     let mapping = this.mappings[blockName];
     if (mapping) {
