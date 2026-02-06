@@ -188,6 +188,15 @@ export function Viewer({ data }) {
   const [recentFiles, setRecentFiles] = useState([]);
   const [showRecentFiles, setShowRecentFiles] = useState(false);
 
+  const saveToRecentFiles = (fileInfo) => {
+    setRecentFiles(prev => {
+      const filtered = prev.filter(f => f.name !== fileInfo.name);
+      const updated = [fileInfo, ...filtered].slice(0, 10);
+      localStorage.setItem('litematica_recent_files', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   // Calculate Initial Bounds and Center
   useEffect(() => {
     if (!data || !data.regions) return;
@@ -256,16 +265,6 @@ export function Viewer({ data }) {
     }
   }, []);
 
-  // Session 4: Save to recent files
-  const saveToRecentFiles = (fileInfo) => {
-    setRecentFiles(prev => {
-      const filtered = prev.filter(f => f.name !== fileInfo.name);
-      const updated = [fileInfo, ...filtered].slice(0, 10); // Keep last 10
-      localStorage.setItem('litematica_recent_files', JSON.stringify(updated));
-      return updated;
-    });
-  };
-
   // Stable callbacks used by effects
   const toggleBuildAnimation = useCallback(() => {
     if (isAnimating) {
@@ -307,6 +306,16 @@ export function Viewer({ data }) {
       controlsRef.current.target.set(centerX, centerY, centerZ);
     }
   }, [modelBounds, controlsRef]);
+
+  const handleScreenshot = () => {
+    const canvas = document.querySelector("canvas");
+    if (canvas) {
+      const link = document.createElement("a");
+      link.download = "litematica_render.png";
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    }
+  };
 
   // Session 4: Keyboard shortcuts
   useEffect(() => {
@@ -355,7 +364,6 @@ export function Viewer({ data }) {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [toggleBuildAnimation, setCameraPreset]);
 
-
   // Process data into groups ONCE (not dependent on maxLayer)
   const groups = useMemo(() => {
     const g = {};
@@ -386,16 +394,6 @@ export function Viewer({ data }) {
     return g;
   }, [data]); // Removed maxLayer dependency
 
-
-  const handleScreenshot = () => {
-    const canvas = document.querySelector("canvas");
-    if (canvas) {
-      const link = document.createElement("a");
-      link.download = "litematica_render.png";
-      link.href = canvas.toDataURL("image/png");
-      link.click();
-    }
-  };
 
   // Session 3: Multiple screenshot export
   const handleMultipleScreenshots = async () => {
