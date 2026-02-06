@@ -12,6 +12,7 @@ import { getTextureUrl } from "../utils/blockTextures";
 import { MaterialList } from "./MaterialList";
 import { Sidebar } from "./Sidebar";
 import bgImage from "../assets/bg.png";
+import { resourceManager } from "../utils/engine/ResourceManager";
 
 class TextureErrorBoundary extends React.Component {
   constructor(props) {
@@ -31,214 +32,116 @@ class TextureErrorBoundary extends React.Component {
   }
 }
 
-function ColoredBlockInstancedMesh({ name, positions, maxLayer, wireframeMode, xrayMode }) {
+function V2BlockInstancedMesh({ geometry, material, positions, maxLayer }) {
   const meshRef = useRef();
-  const color = blockColors[name] || 0xff00ff; // Default pink if unknown
 
   useEffect(() => {
     if (!meshRef.current) return;
 
     const tempObject = new THREE.Object3D();
+    const tempMatrix = new THREE.Matrix4();
+    const rotationMatrix = new THREE.Matrix4();
 
     positions.forEach((pos, i) => {
-      // Filter visibility by Y-level efficiently via scale
-      // We keep the instance count constant to prevent flickering (unmounting/remounting)
       const isVisible = pos.y <= maxLayer;
       const scale = isVisible ? 1 : 0;
 
-      tempObject.position.set(pos.x, pos.y, pos.z);
+      tempObject.position.set(pos.x + 0.5, pos.y + 0.5, pos.z + 0.5);
       tempObject.scale.set(scale, scale, scale);
       tempObject.updateMatrix();
-      meshRef.current.setMatrixAt(i, tempObject.matrix);
-    });
-
-    meshRef.current.instanceMatrix.needsUpdate = true;
-  }, [positions, maxLayer]);
-
-  return (
-    <instancedMesh ref={meshRef} args={[null, null, positions.length]} frustumCulled={false}>
-      <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial
-        color={color}
-        wireframe={wireframeMode}
-        transparent={xrayMode}
-        opacity={xrayMode ? 0.3 : 1.0}
-      />
-    </instancedMesh>
-  );
-}
-
-function TexturedBlockInstancedMesh({ name, positions, maxLayer, wireframeMode, xrayMode }) {
-  const meshRef = useRef();
-
-  // We need to handle properties. 
-  // Since we are instancing, all blocks in this mesh *share* the same texture.
-  // BUT the grouping in SceneContent groups by "name" only, effectively ignoring props.
-  // This is a flaw in the current Viewer logic if we want per-state textures (like vertical vs horizontal logs in the same group).
-  // FOR NOW, we will just use the props of the first item to determine the texture for the group.
-  // A proper fix would require grouping by "name + unique_texture_key".
-  const firstBlockProps = positions[0]?.props || {};
-
-  const topUrl = getTextureUrl(name, "top", firstBlockProps);
-  const bottomUrl = getTextureUrl(name, "bottom", firstBlockProps);
-  const sideUrl = getTextureUrl(name, "side", firstBlockProps);
-
-  // Load textures
-  const [topTex, bottomTex, sideTex] = useTexture([topUrl, bottomUrl, sideUrl]);
-
-  // Configure textures for Minecraft look (pixelated)
-  useMemo(() => {
-    [topTex, bottomTex, sideTex].forEach((t) => {
-      if (t) {
-        t.magFilter = THREE.NearestFilter;
-        t.minFilter = THREE.NearestFilter;
-        t.colorSpace = THREE.SRGBColorSpace;
-      }
-    });
-  }, [topTex, bottomTex, sideTex]);
-
-  const materials = useMemo(() => {
-    // If we want to support transparency (e.g. glass), we should set transparent={true}
-    // and maybe alphaTest to handle cutouts (like leaves/grass).
-    const isTransparent =
-      name.includes("glass") ||
-      name.includes("leaf") ||
-      name.includes("sapling") ||
-      name.includes("rail") ||
-      name.includes("flower") ||
-      name.includes("grass") ||
-      name.includes("door") ||
-      name.includes("trapdoor");
-
-    const matProps = {
-      transparent: isTransparent || xrayMode,
-      alphaTest: isTransparent ? 0.5 : 0,
-      side: isTransparent ? THREE.DoubleSide : THREE.FrontSide,
-      wireframe: wireframeMode,
-      opacity: xrayMode ? 0.3 : 1.0,
-    };
-
-    const matSide = new THREE.MeshStandardMaterial({
-      map: sideTex,
-      ...matProps,
-    });
-    const matTop = new THREE.MeshStandardMaterial({ map: topTex, ...matProps });
-    const matBottom = new THREE.MeshStandardMaterial({
-      map: bottomTex,
-      ...matProps,
-    });
-
-    // Order: px, nx, py, ny, pz, nz
-    // Right, Left, Top, Bottom, Front, Back
-    return [
-      matSide, // Right
-      matSide, // Left
-      matTop, // Top
-      matBottom, // Bottom
-      matSide, // Front
-      matSide, // Back
-    ];
-  }, [topTex, bottomTex, sideTex, name, wireframeMode, xrayMode]);
-
-  useEffect(() => {
-    if (!meshRef.current) return;
-
-    const tempObject = new THREE.Object3D();
-
-    positions.forEach((pos, i) => {
-      const { x, y, z, props } = pos;
-
-      const isVisible = pos.y <= maxLayer;
-
-      if (!isVisible) {
-        // Hide by scaling to 0
-        tempObject.position.set(x, y, z); // Position doesn't strictly matter if scale is 0, but good to keep valid
-        tempObject.scale.set(0, 0, 0);
-        tempObject.updateMatrix();
+      
+      // Apply variant-specific rotation (from blockstate variants)
+          if (pos.vRotation) {
+            rotationMatrix.makeRotationFromEuler(new THREE.Euler(
+              (-pos.vRotation.x * Math.PI) / 180,
+              (-pos.vRotation.y * Math.PI) / 180,
+              0,
+              'XYZ' // Minecraft rotation order
+            ));
+        tempMatrix.multiplyMatrices(tempObject.matrix, rotationMatrix);
+        meshRef.current.setMatrixAt(i, tempMatrix);
+      } else {
         meshRef.current.setMatrixAt(i, tempObject.matrix);
-        return;
       }
-
-      tempObject.position.set(x, y, z);
-      tempObject.rotation.set(0, 0, 0);
-      tempObject.scale.set(1, 1, 1);
-
-      // Simple model adjustments based on name and properties
-      // Note: This is a basic approximation. Full model support requires loading JSON models.
-
-      // Slabs
-      if (name.includes("slab")) {
-        const type = props?.type?.value;
-        if (type === "bottom") {
-          tempObject.scale.set(1, 0.5, 1);
-          tempObject.position.y -= 0.25;
-        } else if (type === "top") {
-          tempObject.scale.set(1, 0.5, 1);
-          tempObject.position.y += 0.25;
-        }
-        // double is full block (default)
-      }
-      // Carpet
-      else if (name.includes("carpet")) {
-        tempObject.scale.set(1, 0.0625, 1);
-        tempObject.position.y -= 0.5 - 0.03125;
-      }
-      // Trapdoors (approximate as thin blocks)
-      else if (name.includes("trapdoor")) {
-        const half = props?.half?.value;
-        // Simplified: just flat on bottom or top if closed, or side if open
-        // Handling rotation is complex without full state parsing.
-        // For now, let's just make them thin.
-        tempObject.scale.set(1, 0.1875, 1);
-        if (half === "top") {
-          tempObject.position.y += 0.5 - 0.09375;
-        } else {
-          tempObject.position.y -= 0.5 - 0.09375;
-        }
-      }
-
-      tempObject.updateMatrix();
-      meshRef.current.setMatrixAt(i, tempObject.matrix);
     });
 
     meshRef.current.instanceMatrix.needsUpdate = true;
-  }, [positions, name, maxLayer]);
+  }, [positions, maxLayer, geometry]);
 
   return (
-    <instancedMesh
-      ref={meshRef}
-      args={[null, null, positions.length]}
-      material={materials}
-      frustumCulled={false}
-    >
-      <boxGeometry args={[1, 1, 1]} />
-    </instancedMesh>
+    <instancedMesh ref={meshRef} args={[geometry, material, positions.length]} frustumCulled={false} />
   );
-}
-
-function BlockInstancedMesh({ name, positions, maxLayer, wireframeMode, xrayMode }) {
-  if (!positions || positions.length === 0) return null;
-
-  const hasTexture = getTextureUrl(name, 'top') !== null;
-
-  if (hasTexture) {
-    return (
-      <TextureErrorBoundary fallback={<ColoredBlockInstancedMesh name={name} positions={positions} maxLayer={maxLayer} wireframeMode={wireframeMode} xrayMode={xrayMode} />}>
-        <Suspense fallback={<ColoredBlockInstancedMesh name={name} positions={positions} maxLayer={maxLayer} wireframeMode={wireframeMode} xrayMode={xrayMode} />}>
-          <TexturedBlockInstancedMesh name={name} positions={positions} maxLayer={maxLayer} wireframeMode={wireframeMode} xrayMode={xrayMode} />
-        </Suspense>
-      </TextureErrorBoundary>
-    );
-  } else {
-    return <ColoredBlockInstancedMesh name={name} positions={positions} maxLayer={maxLayer} wireframeMode={wireframeMode} xrayMode={xrayMode} />;
-  }
 }
 
 function SceneContent({ sceneGroups, maxLayer, wireframeMode, xrayMode }) {
+  const [v2Groups, setV2Groups] = useState([]);
+
+  useEffect(() => {
+    const processGroups = async () => {
+      const groups = new Map();
+      const names = Object.keys(sceneGroups);
+
+      // Pre-process unique states to avoid heavy await in the inner loop
+      const statePromises = [];
+      const stateMap = new Map(); // key -> { name, props, data }
+
+      for (const name of names) {
+        const blocks = sceneGroups[name];
+        for (const block of blocks) {
+          const propKey = JSON.stringify(block.props || {});
+          const key = `${name}|${propKey}`;
+          if (!stateMap.has(key)) {
+            stateMap.set(key, { name, props: block.props || {} });
+            statePromises.push((async () => {
+              const data = await resourceManager.getBlockData(name, block.props || {});
+              if (data) stateMap.get(key).data = data;
+            })());
+          }
+        }
+      }
+
+      await Promise.all(statePromises);
+
+      // Now build the groups
+      for (const name of names) {
+        for (const block of sceneGroups[name]) {
+          const propKey = JSON.stringify(block.props || {});
+          const key = `${name}|${propKey}`;
+          const stateInfo = stateMap.get(key);
+          if (!stateInfo || !stateInfo.data) continue;
+
+          const data = stateInfo.data;
+          if (!data.geometry) continue;
+          const geoKey = data.geometry.uuid;
+
+          if (!groups.has(geoKey)) {
+            groups.set(geoKey, { 
+              geometry: data.geometry, 
+              material: data.material, 
+              positions: [] 
+            });
+          }
+          groups.get(geoKey).positions.push({
+            ...block,
+            vRotation: data.rotation
+          });
+        }
+      }
+      setV2Groups(Array.from(groups.values()));
+    };
+    processGroups();
+  }, [sceneGroups]);
+
   return (
     <group>
-      {Object.keys(sceneGroups).map((name) => (
-        <BlockInstancedMesh key={name} name={name} positions={sceneGroups[name]} maxLayer={maxLayer} wireframeMode={wireframeMode} xrayMode={xrayMode} />
+      {v2Groups.map((group, idx) => (
+        <V2BlockInstancedMesh 
+          key={idx} 
+          geometry={group.geometry}
+          material={group.material}
+          positions={group.positions} 
+          maxLayer={maxLayer}
+        />
       ))}
     </group>
   );
