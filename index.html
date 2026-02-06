@@ -12,6 +12,17 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <script>
+      (async () => {
+        try {
+          const r = await fetch('/mc/block_textures_map.json');
+          if (r.ok) globalThis.FULL_BLOCK_MAP = await r.json();
+        } catch (e) {}
+        const s = document.createElement('script');
+        s.type = 'module';
+        s.src = '/src/main.jsx';
+        document.body.appendChild(s);
+      })();
+    </script>
   </body>
 </html>

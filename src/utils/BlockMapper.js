@@ -1,15 +1,11 @@
 
 import blockMappings from '../assets/block_mapping.json';
 
-// Fallback for simple single-texture blocks that might not be in the JSON
-const SINGLE_TEXTURE_SUFFIXES = [
-  "_planks", "_ore", "_wool", "_concrete", "_terracotta", "_stained_glass",
-  "_fan", "_torch", "_coral", "_glass"
-];
-
 export class BlockMapper {
   constructor() {
-    this.mappings = blockMappings;
+    const full = globalThis.FULL_BLOCK_MAP;
+    this.mappings = full && typeof full === 'object' ? full : blockMappings;
+    this.fallbackMappings = blockMappings;
   }
 
   /**
@@ -19,28 +15,21 @@ export class BlockMapper {
    * @param {object} props - Block properties (e.g. { axis: 'x', facing: 'north' })
    * @returns {string} - Texture filename without extension
    */
-  getTexture(blockName, face, props = {}) {
-    // 1. Check strict mapping
-    const mapping = this.mappings[blockName];
-    if (mapping) {
-        if (typeof mapping.texture === 'string') {
-            return mapping.texture; // Single texture for everything
+  getTexture(blockName, face, _props = {}) {
+    void _props;
+    const m = this.mappings[blockName] ?? this.fallbackMappings[blockName];
+    if (m) {
+      if (typeof m === 'string') return m;
+      if (typeof m.texture === 'string') return m.texture;
+      const faces = m.sides || m;
+      if (faces && typeof faces === 'object') {
+        if (faces[face]) return faces[face];
+        if (face === 'side') {
+          if (faces['side']) return faces['side'];
+          if (faces['north']) return faces['north'];
         }
-        
-        if (mapping.sides) {
-            // Check specific face mapping
-            // If face is 'side', we might want to return a side texture if defined,
-            // or fallback to specific cardinals if 'side' isn't explicitly there but north/etc are.
-            // But usually 'side' comes from the viewer requesting a generic side.
-            if (mapping.sides[face]) {
-                return mapping.sides[face];
-            }
-            // Fallback for generic 'side' request if specific sides are defined
-            if (face === 'side' && mapping.sides['north']) {
-                 return mapping.sides['north'];
-            }
-             // Fallback for generic 'side' request if only top/top exists? Unlikely.
-        }
+        if (faces['all']) return faces['all'];
+      }
     }
 
     // 2. Automated fallback for common patterns
@@ -118,39 +107,28 @@ export class BlockMapper {
     if (name.includes('candle_cake')) return 'cake_top';
     if (name.includes('petrified_oak')) return 'oak_planks';
     
-    // Check if the name matches a single texture base
-    const isSingleTexture = SINGLE_TEXTURE_BASES.some(base => name.endsWith(base));
-
-    // Check if the name exists in mappings
-    const finalMapping = this.mappings[`minecraft:${name}`];
-    if (finalMapping) {
-        if (typeof finalMapping.texture === 'string') return finalMapping.texture;
-        if (finalMapping.sides) {
-            if (finalMapping.sides[face]) return finalMapping.sides[face];
-            if (face === 'side' && finalMapping.sides['north']) return finalMapping.sides['north'];
-            
-            // If top/bottom requested but not found, check if it's a single texture block
-            if (isSingleTexture && finalMapping.sides['side']) return finalMapping.sides['side'];
-            
-            // Fallback to 'side' or first available
-            if ((face === 'top' || face === 'bottom') && finalMapping.sides['side']) return finalMapping.sides['side'];
-        }
+    const final = (this.mappings[`minecraft:${name}`] ?? this.fallbackMappings[`minecraft:${name}`]);
+    if (final) {
+      if (typeof final === 'string') return final;
+      if (typeof final.texture === 'string') return final.texture;
+      const faces = final.sides || final;
+      if (faces[face]) return faces[face];
+      if (face === 'side' && faces['north']) return faces['north'];
+      if ((face === 'top' || face === 'bottom') && faces['side']) return faces['side'];
+      if (faces['all']) return faces['all'];
     }
     
     if (blockName.startsWith('minecraft:potted_')) return name;
 
-    // Heuristic for logs/stems that are not in mappings but requested as top/bottom
     if (face === 'top' || face === 'bottom') {
-         if (isSingleTexture) return name;
-
-         const logTypes = ['oak', 'spruce', 'birch', 'jungle', 'acacia', 'dark_oak', 'mangrove', 'cherry', 'pale_oak', 'crimson', 'warped'];
-         for (const log of logTypes) {
-             if (name === log || name === `${log}_log` || name === `${log}_stem`) {
-                 const base = name.includes('_log') || name.includes('_stem') ? name : (log === 'crimson' || log === 'warped' ? `${log}_stem` : `${log}_log`);
-                 return `${base}_top`;
-             }
-         }
-         return `${name}_top`; 
+      const logs = ['oak','spruce','birch','jungle','acacia','dark_oak','mangrove','cherry','pale_oak','crimson','warped'];
+      for (const l of logs) {
+        if (name === l || name === `${l}_log` || name === `${l}_stem`) {
+          const base = name.includes('_log') || name.includes('_stem') ? name : (l === 'crimson' || l === 'warped' ? `${l}_stem` : `${l}_log`);
+          return `${base}_top`;
+        }
+      }
+      return `${name}_top`; 
     }
 
     // Default
