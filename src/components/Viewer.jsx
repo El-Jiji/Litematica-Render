@@ -254,7 +254,7 @@ export function Viewer({ data }) {
         console.error('Failed to parse recent files:', e);
       }
     }
-  }, [toggleBuildAnimation, setCameraPreset]);
+  }, []);
 
   // Session 4: Save to recent files
   const saveToRecentFiles = (fileInfo) => {
@@ -265,6 +265,48 @@ export function Viewer({ data }) {
       return updated;
     });
   };
+
+  // Stable callbacks used by effects
+  const toggleBuildAnimation = useCallback(() => {
+    if (isAnimating) {
+      setIsAnimating(false);
+    } else {
+      setMaxLayer(layerBounds.min);
+      setIsAnimating(true);
+    }
+  }, [isAnimating, layerBounds.min]);
+
+  const setCameraPreset = useCallback((preset) => {
+    const { minX, maxX, minY, maxY, minZ, maxZ } = modelBounds;
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const centerZ = (minZ + maxZ) / 2;
+    const maxDim = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
+    const dist = maxDim * 1.8;
+
+    let newPos;
+    switch (preset) {
+      case 'front':
+        newPos = [centerX, centerY, centerZ + dist];
+        break;
+      case 'side':
+        newPos = [centerX + dist, centerY, centerZ];
+        break;
+      case 'top':
+        newPos = [centerX, centerY + dist, centerZ];
+        break;
+      case 'isometric':
+        newPos = [centerX + dist * 0.7, centerY + dist * 0.7, centerZ + dist * 0.7];
+        break;
+      default:
+        return;
+    }
+
+    setCameraPosition(newPos);
+    if (controlsRef.current) {
+      controlsRef.current.target.set(centerX, centerY, centerZ);
+    }
+  }, [modelBounds, controlsRef]);
 
   // Session 4: Keyboard shortcuts
   useEffect(() => {
@@ -453,45 +495,7 @@ export function Viewer({ data }) {
     return () => clearInterval(interval);
   }, [isAnimating, animationSpeed, layerBounds.max]);
 
-  const toggleBuildAnimation = useCallback(() => {
-    if (isAnimating) {
-      setIsAnimating(false);
-    } else {
-      setMaxLayer(layerBounds.min);
-      setIsAnimating(true);
-    }
-  }, [isAnimating, layerBounds.min]);
-  const setCameraPreset = useCallback((preset) => {
-    const { minX, maxX, minY, maxY, minZ, maxZ } = modelBounds;
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
-    const centerZ = (minZ + maxZ) / 2;
-    const maxDim = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
-    const dist = maxDim * 1.8;
-
-    let newPos;
-    switch (preset) {
-      case 'front':
-        newPos = [centerX, centerY, centerZ + dist];
-        break;
-      case 'side':
-        newPos = [centerX + dist, centerY, centerZ];
-        break;
-      case 'top':
-        newPos = [centerX, centerY + dist, centerZ];
-        break;
-      case 'isometric':
-        newPos = [centerX + dist * 0.7, centerY + dist * 0.7, centerZ + dist * 0.7];
-        break;
-      default:
-        return;
-    }
-
-    setCameraPosition(newPos);
-    if (controlsRef.current) {
-      controlsRef.current.target.set(centerX, centerY, centerZ);
-    }
-  }, [modelBounds, controlsRef]);
+ 
 
   return (
     <div style={{ width: "100vw", height: "100vh", background: "#000", position: 'relative', overflow: 'hidden' }}>
