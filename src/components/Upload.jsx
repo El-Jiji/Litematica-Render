@@ -1,4 +1,5 @@
 import React from "react";
+import TextType from "./TextType";
 
 // I'll use native events to avoid extra deps if possible, or just install react-dropzone.
 // Native is easy.
@@ -40,7 +41,27 @@ export function Upload({ onFileLoaded }) {
       onDragOver={onDragOver}
     >
       <div style={{ textAlign: "center", padding: "20px" }}>
-        <h1>Litematica Web Viewer</h1>
+        <TextType 
+          as="h1"
+          text={[
+            "Litematica Web Viewer",
+            "Renderizado 3D de esquemas", 
+            "Visualiza esquemas sin abrir el juego", 
+            "Preview instantáneo de tus builds",
+            "Carga, visualiza, construye"
+          ]}
+          typingSpeed={75}
+          pauseDuration={1500}
+          showCursor
+          cursorCharacter="_"
+          deletingSpeed={30}
+          cursorBlinkDuration={0.5}
+          style={{ 
+            fontSize: "2rem", 
+            margin: "0 0 20px 0",
+            color: "#fff"
+          }}
+        />
         <p>Arrastra tu archivo .litematic aquí</p>
         <p>o</p>
         <label
