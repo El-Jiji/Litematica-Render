@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Upload } from "./components/Upload";
 import { Viewer } from "./components/Viewer";
 import { parseLitematic } from "./utils/litematicParser";
@@ -7,6 +7,49 @@ function App() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const dbRef = useRef(null);
+  const dbReadyRef = useRef(Promise.resolve());
+
+  useEffect(() => {
+    const req = indexedDB.open("litematica_db", 1);
+    dbReadyRef.current = new Promise((resolve, reject) => {
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains("files")) {
+          db.createObjectStore("files", { keyPath: "name" });
+        }
+      };
+      req.onsuccess = (e) => {
+        dbRef.current = e.target.result;
+        resolve();
+      };
+      req.onerror = () => {
+        console.error("IndexedDB init failed");
+        reject(req.error);
+      };
+    });
+  }, []);
+
+  const saveFileToDB = (file) => {
+    const db = dbRef.current;
+    if (!db) return;
+    const tx = db.transaction("files", "readwrite");
+    const store = tx.objectStore("files");
+    store.put({ name: file.name, blob: file });
+  };
+
+  const loadFileFromDB = async (name) => {
+    await dbReadyRef.current;
+    const db = dbRef.current;
+    if (!db) throw new Error("DB no inicializada");
+    const tx = db.transaction("files", "readonly");
+    const store = tx.objectStore("files");
+    const req = store.get(name);
+    return new Promise((resolve, reject) => {
+      req.onsuccess = () => resolve(req.result?.blob || null);
+      req.onerror = () => reject(req.error);
+    });
+  };
 
   const handleFileLoaded = async (file) => {
     setLoading(true);
@@ -16,9 +59,27 @@ function App() {
       const parsedData = await parseLitematic(file);
       console.log("Parsed data:", parsedData);
       setData(parsedData);
+      saveFileToDB(file);
     } catch (err) {
       console.error(err);
       setError(`Error al leer el archivo: ${err.message || err}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLoadRecentByName = async (name) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const blob = await loadFileFromDB(name);
+      if (!blob) {
+        throw new Error("Archivo no encontrado en recientes");
+      }
+      const parsedData = await parseLitematic(blob);
+      setData(parsedData);
+    } catch (err) {
+      setError(`No se pudo cargar el archivo reciente: ${err.message || err}`);
     } finally {
       setLoading(false);
     }
@@ -73,7 +134,7 @@ function App() {
         </>
       ) : (
         <>
-          <Viewer data={data} />
+          <Viewer data={data} onLoadRecentFile={handleLoadRecentByName} />
           <button
             onClick={handleReset}
             style={{
