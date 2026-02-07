@@ -194,7 +194,7 @@ function CameraController({ position }) {
   return null;
 }
 
-export function Viewer({ data, onLoadRecentFile }) {
+export function Viewer({ data }) {
   // State for layer slicing
   const [maxLayer, setMaxLayer] = useState(256);
   const [layerBounds, setLayerBounds] = useState({ min: 0, max: 256 });
@@ -232,19 +232,8 @@ export function Viewer({ data, onLoadRecentFile }) {
   const [animationSpeed, setAnimationSpeed] = useState(50); // ms per layer
   const sceneRef = useRef();
 
-  // Session 4: History, X-Ray, and UX
+  // Session 4: X-Ray and UX
   const [xrayMode, setXrayMode] = useState(false);
-  const [recentFiles, setRecentFiles] = useState([]);
-  const [showRecentFiles, setShowRecentFiles] = useState(false);
-
-  const saveToRecentFiles = (fileInfo) => {
-    setRecentFiles((prev) => {
-      const filtered = prev.filter((f) => f.name !== fileInfo.name);
-      const updated = [fileInfo, ...filtered].slice(0, 10);
-      localStorage.setItem("litematica_recent_files", JSON.stringify(updated));
-      return updated;
-    });
-  };
 
   // Calculate Initial Bounds and Center
   useEffect(() => {
@@ -291,14 +280,7 @@ export function Viewer({ data, onLoadRecentFile }) {
     setModelDimensions({ width, height, depth });
     setModelBounds({ minX, maxX, minY, maxY, minZ, maxZ });
 
-    // Session 4: Save to recent files
-    if (data.metadata?.Name) {
-      saveToRecentFiles({
-        name: data.metadata.Name.value || "Unnamed",
-        timestamp: Date.now(),
-        dimensions: { width, height, depth },
-      });
-    }
+    // Recent files removed
 
     // Set camera to look at center from a reasonable distance
     const maxDim = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
@@ -306,17 +288,7 @@ export function Viewer({ data, onLoadRecentFile }) {
     setCameraPosition([centerX + dist, centerY + dist / 2, centerZ + dist]);
   }, [data]);
 
-  // Session 4: Load recent files from localStorage
-  useEffect(() => {
-    const stored = localStorage.getItem("litematica_recent_files");
-    if (stored) {
-      try {
-        setRecentFiles(JSON.parse(stored));
-      } catch (e) {
-        console.error("Failed to parse recent files:", e);
-      }
-    }
-  }, []);
+  // Recent files removed
 
   // Stable callbacks used by effects
   const toggleBuildAnimation = useCallback(() => {
@@ -640,10 +612,6 @@ export function Viewer({ data, onLoadRecentFile }) {
         setAnimationSpeed={setAnimationSpeed}
         xrayMode={xrayMode}
         setXrayMode={setXrayMode}
-        recentFiles={recentFiles}
-        showRecentFiles={showRecentFiles}
-        setShowRecentFiles={setShowRecentFiles}
-        onLoadRecentFile={onLoadRecentFile}
       />
 
       {/* Render Material List separately if needed, or Sidebar could handle it. 

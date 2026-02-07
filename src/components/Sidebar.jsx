@@ -28,10 +28,6 @@ export function Sidebar({
   setAnimationSpeed,
   xrayMode,
   setXrayMode,
-  recentFiles,
-  showRecentFiles,
-  setShowRecentFiles,
-  onLoadRecentFile,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [showMetadata, setShowMetadata] = useState(false);
@@ -645,73 +641,7 @@ export function Sidebar({
             </div>
           </div>
 
-          {/* Session 4: Recent Files */}
-          {recentFiles && recentFiles.length > 0 && (
-            <div style={{ marginBottom: "30px" }} className="staggered-child">
-              <h3
-                style={{
-                  fontSize: "0.75rem",
-                  textTransform: "uppercase",
-                  color: colors.textMuted,
-                  marginBottom: "15px",
-                  letterSpacing: "1px",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                Recent Files
-                <button
-                  onClick={() => setShowRecentFiles(!showRecentFiles)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: colors.accent,
-                    cursor: "pointer",
-                    fontSize: "0.9rem",
-                  }}
-                >
-                  {showRecentFiles ? "▼" : "▶"}
-                </button>
-              </h3>
-
-              {showRecentFiles && (
-                <div
-                  style={{
-                    display: "grid",
-                    gap: "8px",
-                    maxHeight: "200px",
-                    overflowY: "auto",
-                  }}
-                >
-                  {recentFiles.map((file, idx) => (
-                    <div
-                      key={idx}
-                      onClick={() => onLoadRecentFile && onLoadRecentFile(file.name)}
-                      style={{
-                        background: colors.buttonBg,
-                        border: `1px solid ${colors.border} `,
-                        borderRadius: "6px",
-                        padding: "10px",
-                        fontSize: "0.8rem",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <div style={{ fontWeight: "500", marginBottom: "4px" }}>
-                        {file.name}
-                      </div>
-                      <div
-                        style={{ color: colors.textMuted, fontSize: "0.7rem" }}
-                      >
-                        {file.dimensions.width}×{file.dimensions.height}×
-                        {file.dimensions.depth}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+          {/* Recent Files removed */}
 
           {/* Section: Help */}
           <div className="staggered-child">
