@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Upload } from "./components/Upload";
 import { Viewer } from "./components/Viewer";
+import { SocialLinks } from "./components/SocialLinks";
 import { parseLitematic } from "./utils/litematicParser";
 
 function App() {
@@ -93,6 +94,8 @@ function App() {
           </button>
         </>
       )}
+      {/* Social Links Overlay */}
+      <SocialLinks />
     </div>
   );
 }
