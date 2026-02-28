@@ -1,4 +1,6 @@
-import React, { useMemo } from "react";
+"use client";
+
+import React, { useMemo, useState } from "react";
 
 export function MaterialList({ data, onClose }) {
     const materials = useMemo(() => {

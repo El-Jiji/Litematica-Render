@@ -1,3 +1,5 @@
+"use client";
+
 import React, {
   useMemo,
   useEffect,
@@ -540,7 +542,7 @@ export function Viewer({ data }) {
           left: -20,
           right: -20,
           bottom: -20,
-          backgroundImage: `url(${bgImage})`,
+          backgroundImage: `url(${bgImage.src || bgImage})`,
           backgroundSize: "cover",
           backgroundPosition: "center",
           filter: "blur(20px) brightness(0.6)",

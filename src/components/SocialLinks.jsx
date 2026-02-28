@@ -1,3 +1,5 @@
+"use client";
+
 import React from "react";
 
 // Simple Icons & Material Design paths

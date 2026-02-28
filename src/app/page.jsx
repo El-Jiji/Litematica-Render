@@ -1,10 +1,12 @@
-import React, { useState } from "react";
-import { Upload } from "./components/Upload";
-import { Viewer } from "./components/Viewer";
-import { SocialLinks } from "./components/SocialLinks";
-import { parseLitematic } from "./utils/litematicParser";
+"use client";
 
-function App() {
+import React, { useState } from "react";
+import { Upload } from "../components/Upload";
+import { Viewer } from "../components/Viewer";
+import { SocialLinks } from "../components/SocialLinks";
+import { parseLitematic } from "../utils/litematicParser";
+
+export default function Home() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -99,5 +101,3 @@ function App() {
     </div>
   );
 }
-
-export default App;
