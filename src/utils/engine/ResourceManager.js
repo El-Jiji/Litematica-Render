@@ -1,12 +1,12 @@
-import { assetLoader } from './AssetLoader';
-import { BlockStateResolver } from './BlockStateResolver';
-import { GeometryBuilder } from './GeometryBuilder';
-import * as THREE from 'three';
-import { blockMapper } from '../BlockMapper';
+import { assetLoader } from "./AssetLoader";
+import { BlockStateResolver } from "./BlockStateResolver";
+import { GeometryBuilder } from "./GeometryBuilder";
+import * as THREE from "three";
+import { blockMapper } from "../BlockMapper";
 
 class ResourceManager {
   constructor() {
-    this.geometryCache = new Map(); // key: modelID (or variants identifier)
+    this.geometryCache = new Map();
     this.sharedMaterial = null;
   }
 
@@ -17,16 +17,16 @@ class ResourceManager {
         map: assetLoader.atlasTexture,
         transparent: true,
         alphaTest: 0.5,
-        side: THREE.FrontSide
+        side: THREE.FrontSide,
       });
     }
     return this.sharedMaterial;
   }
 
-  async getBlockData(blockName, props) {
+  async getBlockData(blockName, props, visibleFaces = 63) {
     const blockState = await assetLoader.getBlockState(blockName);
     if (!blockState) {
-      if (blockName !== 'air' && blockName !== 'minecraft:air') {
+      if (blockName !== "air" && blockName !== "minecraft:air") {
         console.warn(`[ResourceManager] Missing blockstate for: ${blockName}`);
       }
       return null;
@@ -44,22 +44,26 @@ class ResourceManager {
     // BUT some blocks need baked rotation (like those with non-90 deg rotations or complex elements)
     // For simplicity now, let's keep baking for anything that isn't a simple 90-deg rotation if needed.
     // Actually, let's group by "variants string" but WITHOUT x,y.
-    const geometryKey = variants.map(v => v.model).join('|');
+    const geometryKey = `${variants.map((v) => v.model).join("|")}::${visibleFaces}`;
     
     let geometry = this.geometryCache.get(geometryKey);
     if (geometry === undefined) {
-      // Build geometry WITHOUT variant rotation baked in
-      geometry = await GeometryBuilder.build(variants, assetLoader, false);
+      geometry = await GeometryBuilder.build(
+        variants,
+        assetLoader,
+        false,
+        visibleFaces,
+      );
       this.geometryCache.set(geometryKey, geometry);
     }
 
     if (!geometry) {
-      const texName = blockMapper.getTexture(blockName, 'side', props || {});
+      const texName = blockMapper.getTexture(blockName, "side", props || {});
       const texturePath = texName ? `minecraft:block/${texName}` : null;
       const atlasUV = texturePath ? assetLoader.getAtlasUV(texturePath) : null;
       const w = 12, h = 12, d = 1;
       const g = new THREE.BoxGeometry(w, h, d);
-      g.scale(1/16, 1/16, 1/16);
+      g.scale(1 / 16, 1 / 16, 1 / 16);
       const uv = g.attributes.uv;
       if (atlasUV) {
         const u1 = atlasUV[0];
@@ -88,7 +92,7 @@ class ResourceManager {
       geometry, 
       material, 
       // Return the required rotation for the instance
-      rotation: { x: variants[0].x || 0, y: variants[0].y || 0 } 
+      rotation: { x: variants[0].x || 0, y: variants[0].y || 0 },
     };
   }
 }

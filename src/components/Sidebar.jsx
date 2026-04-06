@@ -29,30 +29,40 @@ export function Sidebar({
   setEnvironmentPreset,
   shadowsEnabled,
   setShadowsEnabled,
-  onMultipleScreenshots,
-  onExport3D,
   isAnimating,
   onToggleBuildAnimation,
   animationSpeed,
   setAnimationSpeed,
-  xrayMode,
-  setXrayMode,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [showMetadata, setShowMetadata] = useState(false);
-  const staggerColors = ["#B19EEF", "#5227FF"];
 
-  // Theme colors
-  const colors = {
-    bg: "rgba(20, 20, 20, 0.85)",
-    border: "rgba(255,255,255,0.1)",
-    text: "white",
-    textSecondary: "#ccc",
-    textMuted: "#888",
-    accent: "#3f76e4",
-    buttonBg: "rgba(255,255,255,0.05)",
-    buttonHover: "rgba(63, 118, 228, 0.2)",
+  const panel = {
+    position: "absolute",
+    top: 0,
+    left: collapsed ? "-320px" : "0",
+    width: "300px",
+    height: "100vh",
+    padding: "18px",
+    background: "rgba(20,20,20,0.88)",
+    borderRight: "1px solid rgba(255,255,255,0.1)",
+    color: "white",
+    transition: "left 0.3s ease",
+    zIndex: 100,
+    display: "flex",
+    flexDirection: "column",
+    gap: "16px",
+    overflowY: "auto",
+    fontFamily: "'Inter', sans-serif",
   };
+
+  const metadataName = metadata?.Name?.value || metadata?.Name || metadata?.name;
+  const metadataAuthor =
+    metadata?.Author?.value || metadata?.Author || metadata?.author;
+  const metadataDescription =
+    metadata?.Description?.value ||
+    metadata?.Description ||
+    metadata?.description;
 
   const renderBackendLabel =
     renderBackend === "webgpu"
@@ -61,844 +71,247 @@ export function Sidebar({
         ? "WebGL"
         : "Detecting...";
 
+  const cardStyle = {
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: "10px",
+    padding: "12px",
+  };
+
   return (
     <>
-      {!collapsed && (
-        <div
-          className="staggered-overlay"
-          onClick={() => setCollapsed(true)}
-          style={{ zIndex: 80, backdropFilter: "none" }}
-        />
-      )}
-      {!collapsed &&
-        staggerColors.map((c, i) => (
-          <div
-            key={i}
-            className="staggered-layer"
-            style={{
-              left: 0,
-              width: `${300 + i * 24}px`,
-              background: c,
-              zIndex: 90 - i,
-              transform: `translateX(${-(12 * i)}px)`,
-              opacity: 0.25 + i * 0.1,
-              borderRight: `1px solid ${colors.border}`,
-            }}
-          />
-        ))}
-      {/* Toggle Button (Visible when collapsed) */}
       {collapsed && (
         <button
-          className="menu-toggle"
           onClick={() => setCollapsed(false)}
           style={{
             position: "absolute",
-            top: "20px",
-            left: "20px",
-            zIndex: 100,
-            background: colors.accent,
-            color: "#fff",
-            border: `1px solid ${colors.border} `,
+            top: "16px",
+            left: "16px",
+            zIndex: 110,
+            padding: "10px 14px",
             borderRadius: "8px",
-            padding: "10px 15px",
+            border: "1px solid rgba(255,255,255,0.12)",
+            background: "#3f76e4",
+            color: "white",
             cursor: "pointer",
-            boxShadow: "0 4px 6px rgba(0,0,0,0.3)",
           }}
         >
-          ☰ Menu
+          Menu
         </button>
       )}
 
-      {/* Sidebar Container */}
-      <div
-        style={{
-          position: "absolute",
-          top: "0",
-          left: collapsed ? "-320px" : "0",
-          width: "300px",
-          height: "100vh",
-          background: colors.bg,
-          borderRight: `1px solid ${colors.border} `,
-          transition: "left 0.3s ease",
-          zIndex: 100,
-          display: "flex",
-          flexDirection: "column",
-          color: colors.text,
-          fontFamily: "'Inter', sans-serif",
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            padding: "20px",
-            borderBottom: `1px solid ${colors.border} `,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <h2
-            style={{
-              margin: 0,
-              fontSize: "1.2rem",
-              fontWeight: "600",
-              letterSpacing: "0.5px",
-            }}
+      <div style={panel}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <strong>Litematica Viewer</strong>
+          <button
+            onClick={() => setCollapsed(true)}
+            style={{ background: "transparent", border: "none", color: "#aaa", cursor: "pointer" }}
           >
-            Litematica Viewer
-          </h2>
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            <button
-              onClick={() => setCollapsed(true)}
-              style={{
-                background: "transparent",
-                border: "none",
-                color: colors.textMuted,
-                cursor: "pointer",
-                fontSize: "1.2rem",
-              }}
-            >
-              ✕
-            </button>
-          </div>
+            x
+          </button>
         </div>
 
-        {/* Content */}
-        <div
-          style={{ padding: "20px", flex: 1, overflowY: "auto" }}
-          className={!collapsed ? "staggered-enter" : ""}
-        >
-          {/* Session 1: Model Info */}
-          <div style={{ marginBottom: "30px" }} className="staggered-child">
-            <h3
-              style={{
-                fontSize: "0.75rem",
-                textTransform: "uppercase",
-                color: colors.textMuted,
-                marginBottom: "15px",
-                letterSpacing: "1px",
-              }}
-            >
-              Model Information
-            </h3>
-
-            <div
-              style={{
-                background: colors.buttonBg,
-                padding: "12px",
-                borderRadius: "6px",
-                border: `1px solid ${colors.border} `,
-              }}
-            >
-              <div style={{ fontSize: "0.85rem", marginBottom: "8px" }}>
-                <strong style={{ color: colors.accent }}>Dimensions:</strong>
-              </div>
-              <div
-                style={{
-                  fontSize: "0.8rem",
-                  color: colors.textSecondary,
-                  fontFamily: "monospace",
-                }}
+        <div style={cardStyle}>
+          <div style={{ fontSize: "0.78rem", color: "#8eaef3", marginBottom: "8px" }}>
+            MODEL
+          </div>
+          <div style={{ fontFamily: "monospace", fontSize: "0.85rem" }}>
+            {modelDimensions.width} x {modelDimensions.height} x {modelDimensions.depth}
+          </div>
+          <div style={{ marginTop: "8px", fontSize: "0.82rem", color: "#ccc" }}>
+            Renderer: {renderBackendLabel}
+          </div>
+          {metadataName && (
+            <div style={{ marginTop: "10px", fontSize: "0.8rem", color: "#bbb" }}>
+              <button
+                onClick={() => setShowMetadata((value) => !value)}
+                style={{ background: "transparent", border: "none", color: "#8eaef3", padding: 0, cursor: "pointer" }}
               >
-                {modelDimensions.width} × {modelDimensions.height} ×{" "}
-                {modelDimensions.depth}
-              </div>
-
-              <div
-                style={{
-                  marginTop: "12px",
-                  paddingTop: "12px",
-                  borderTop: `1px solid ${colors.border} `,
-                  fontSize: "0.8rem",
-                  color: colors.textSecondary,
-                }}
-              >
-                <strong style={{ color: colors.accent }}>Renderer:</strong>{" "}
-                {renderBackendLabel}
-              </div>
-
-              {metadata.Name && (
-                <>
-                  <div
-                    style={{
-                      marginTop: "12px",
-                      paddingTop: "12px",
-                      borderTop: `1px solid ${colors.border} `,
-                    }}
-                  >
-                    <button
-                      onClick={() => setShowMetadata(!showMetadata)}
-                      style={{
-                        background: "transparent",
-                        border: "none",
-                        color: colors.accent,
-                        cursor: "pointer",
-                        fontSize: "0.8rem",
-                        padding: 0,
-                      }}
-                    >
-                      {showMetadata ? "▼" : "▶"} Metadata
-                    </button>
-                  </div>
-                  {showMetadata && (
-                    <div
-                      style={{
-                        fontSize: "0.75rem",
-                        color: colors.textMuted,
-                        marginTop: "8px",
-                        lineHeight: "1.6",
-                      }}
-                    >
-                      {metadata.Name && (
-                        <div>
-                          <strong>Name:</strong> {metadata.Name.value}
-                        </div>
-                      )}
-                      {metadata.Author && (
-                        <div>
-                          <strong>Author:</strong> {metadata.Author.value}
-                        </div>
-                      )}
-                      {metadata.Description && (
-                        <div>
-                          <strong>Desc:</strong> {metadata.Description.value}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </>
+                {showMetadata ? "Hide" : "Show"} metadata
+              </button>
+              {showMetadata && (
+                <div style={{ marginTop: "8px", lineHeight: 1.6 }}>
+                  <div>Name: {metadataName}</div>
+                  {metadataAuthor && <div>Author: {metadataAuthor}</div>}
+                  {metadataDescription && <div>Description: {metadataDescription}</div>}
+                </div>
               )}
             </div>
+          )}
+        </div>
+
+        <div style={cardStyle}>
+          <div style={{ fontSize: "0.78rem", color: "#8eaef3", marginBottom: "8px" }}>
+            STATS
           </div>
-
-          {/* Session 2: Lighting Controls */}
-          <div style={{ marginBottom: "30px" }} className="staggered-child">
-            <h3
-              style={{
-                fontSize: "0.75rem",
-                textTransform: "uppercase",
-                color: colors.textMuted,
-                marginBottom: "15px",
-                letterSpacing: "1px",
-              }}
-            >
-              Lighting
-            </h3>
-
-            <div style={{ marginBottom: "15px" }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: "5px",
-                  fontSize: "0.85rem",
-                }}
-              >
-                <span>Ambient</span>
-                <span style={{ fontFamily: "monospace", color: colors.accent }}>
-                  {ambientIntensity.toFixed(1)}
-                </span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="2"
-                step="0.1"
-                value={ambientIntensity}
-                onChange={(e) => setAmbientIntensity(Number(e.target.value))}
-                style={{
-                  width: "100%",
-                  cursor: "pointer",
-                  accentColor: colors.accent,
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: "15px" }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: "5px",
-                  fontSize: "0.85rem",
-                }}
-              >
-                <span>Directional</span>
-                <span style={{ fontFamily: "monospace", color: colors.accent }}>
-                  {directionalIntensity.toFixed(1)}
-                </span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="3"
-                step="0.1"
-                value={directionalIntensity}
-                onChange={(e) =>
-                  setDirectionalIntensity(Number(e.target.value))
-                }
-                style={{
-                  width: "100%",
-                  cursor: "pointer",
-                  accentColor: colors.accent,
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: "15px" }}>
-              <div style={{ fontSize: "0.85rem", marginBottom: "8px" }}>
-                Environment
-              </div>
-              <select
-                value={environmentPreset}
-                onChange={(e) => setEnvironmentPreset(e.target.value)}
-                className="staggered-select"
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  borderRadius: "6px",
-                  border: `1px solid ${colors.border} `,
-                  background: colors.buttonBg,
-                  color: colors.text,
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                }}
-              >
-                <option value="dawn">Dawn</option>
-                <option value="city">Daylight</option>
-                <option value="sunset">Sunset</option>
-                <option value="night">Night</option>
-              </select>
-            </div>
-
-            {/* removed High Quality Shadows option */}
-          </div>
-
-          {/* Section: Visual Modes */}
-          <div style={{ marginBottom: "30px" }} className="staggered-child">
-            <h3
-              style={{
-                fontSize: "0.75rem",
-                textTransform: "uppercase",
-                color: colors.textMuted,
-                marginBottom: "15px",
-                letterSpacing: "1px",
-              }}
-            >
-              Visual Modes
-            </h3>
-
-            <div style={{ display: "grid", gap: "10px" }}>
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={xrayMode}
-                  onChange={(e) => setXrayMode(e.target.checked)}
-                  style={{ cursor: "pointer", accentColor: colors.accent }}
-                />
-                X-Ray Mode
-              </label>
-            </div>
-          </div>
-
-          <div style={{ marginBottom: "30px" }} className="staggered-child">
-            <h3
-              style={{
-                fontSize: "0.75rem",
-                textTransform: "uppercase",
-                color: colors.textMuted,
-                marginBottom: "15px",
-                letterSpacing: "1px",
-              }}
-            >
-              Performance
-            </h3>
-
-            <div
-              style={{
-                background: colors.buttonBg,
-                padding: "12px",
-                borderRadius: "6px",
-                border: `1px solid ${colors.border} `,
-                display: "grid",
-                gap: "10px",
-              }}
-            >
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={adaptiveQuality}
-                  onChange={(e) => setAdaptiveQuality(e.target.checked)}
-                  style={{ cursor: "pointer", accentColor: colors.accent }}
-                />
-                Adaptive Quality
-              </label>
-
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={performanceMode}
-                  onChange={(e) => setPerformanceMode(e.target.checked)}
-                  style={{ cursor: "pointer", accentColor: colors.accent }}
-                />
-                Performance Mode
-              </label>
-
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={shadowsEnabled}
-                  onChange={(e) => setShadowsEnabled(e.target.checked)}
-                  style={{ cursor: "pointer", accentColor: colors.accent }}
-                />
-                Shadows
-              </label>
-            </div>
-          </div>
-
-          <div style={{ marginBottom: "30px" }} className="staggered-child">
-            <h3
-              style={{
-                fontSize: "0.75rem",
-                textTransform: "uppercase",
-                color: colors.textMuted,
-                marginBottom: "15px",
-                letterSpacing: "1px",
-              }}
-            >
-              Live Stats
-            </h3>
-
-            <div
-              style={{
-                background: colors.buttonBg,
-                padding: "12px",
-                borderRadius: "6px",
-                border: `1px solid ${colors.border} `,
-                display: "grid",
-                gap: "6px",
-                fontSize: "0.8rem",
-                color: colors.textSecondary,
-                fontFamily: "monospace",
-              }}
-            >
-              <div>Calls: {renderStats.calls}</div>
-              <div>Triangles: {renderStats.triangles.toLocaleString()}</div>
-              <div>Geometries: {renderStats.geometries}</div>
-              <div>Textures: {renderStats.textures}</div>
-              <div>Blocks: {sceneSummary.totalBlocks.toLocaleString()}</div>
-              <div>Instances: {sceneSummary.instances.toLocaleString()}</div>
-            </div>
-          </div>
-
-          {/* Session 1: Camera Presets */}
-          <div style={{ marginBottom: "30px" }} className="staggered-child">
-            <h3
-              style={{
-                fontSize: "0.75rem",
-                textTransform: "uppercase",
-                color: colors.textMuted,
-                marginBottom: "15px",
-                letterSpacing: "1px",
-              }}
-            >
-              Camera Views
-            </h3>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "8px",
-              }}
-            >
-              {["front", "side", "top", "isometric"].map((preset) => (
-                <button
-                  key={preset}
-                  onClick={() => onCameraPreset(preset)}
-                  style={{
-                    background: colors.buttonBg,
-                    color: colors.text,
-                    border: `1px solid ${colors.border} `,
-                    padding: "10px",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    fontSize: "0.8rem",
-                    textTransform: "capitalize",
-                    transition: "all 0.2s",
-                  }}
-                  onMouseEnter={(e) =>
-                    (e.target.style.background = colors.buttonHover)
-                  }
-                  onMouseLeave={(e) =>
-                    (e.target.style.background = colors.buttonBg)
-                  }
-                >
-                  {preset === "isometric" ? "Iso" : preset}
-                </button>
-              ))}
-            </div>
-
-            <div style={{ marginTop: "12px" }}>
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={autoRotate}
-                  onChange={onToggleAutoRotate}
-                  style={{ cursor: "pointer", accentColor: colors.accent }}
-                />
-                Auto-Rotate
-              </label>
-            </div>
-          </div>
-
-          {/* Section: View Controls */}
-          <div style={{ marginBottom: "30px" }} className="staggered-child">
-            <h3
-              style={{
-                fontSize: "0.75rem",
-                textTransform: "uppercase",
-                color: colors.textMuted,
-                marginBottom: "15px",
-                letterSpacing: "1px",
-              }}
-            >
-              View Configuration
-            </h3>
-
-            <div style={{ marginBottom: "10px" }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: "8px",
-                  fontSize: "0.9rem",
-                }}
-              >
-                <span>Layer Limit</span>
-                <span style={{ fontFamily: "monospace", color: colors.accent }}>
-                  Y: {maxLayer}
-                </span>
-              </div>
-              <input
-                type="range"
-                min={layerBounds.min}
-                max={layerBounds.max}
-                value={maxLayer}
-                onChange={(e) => setMaxLayer(Number(e.target.value))}
-                style={{
-                  width: "100%",
-                  cursor: "pointer",
-                  accentColor: colors.accent,
-                }}
-              />
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  fontSize: "0.7rem",
-                  color: colors.textMuted,
-                  marginTop: "5px",
-                }}
-              >
-                <span>{layerBounds.min}</span>
-                <span>{layerBounds.max}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Section: Actions */}
-          <div style={{ marginBottom: "30px" }} className="staggered-child">
-            <h3
-              style={{
-                fontSize: "0.75rem",
-                textTransform: "uppercase",
-                color: colors.textMuted,
-                marginBottom: "15px",
-                letterSpacing: "1px",
-              }}
-            >
-              Actions
-            </h3>
-
-            <div style={{ display: "grid", gap: "10px" }}>
-              <button
-                onClick={onToggleMaterials}
-                style={{
-                  background: showMaterials ? colors.accent : colors.buttonBg,
-                  color: "white",
-                  border: `1px solid ${colors.border} `,
-                  padding: "12px",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  textAlign: "left",
-                  transition: "all 0.2s",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                }}
-              >
-                <span style={{ fontSize: "1.1rem" }}>📦</span>
-                Material List
-              </button>
-
-              <button
-                onClick={onScreenshot}
-                style={{
-                  background: colors.buttonBg,
-                  color: colors.text,
-                  border: `1px solid ${colors.border} `,
-                  padding: "12px",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  textAlign: "left",
-                  transition: "all 0.2s",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                }}
-              >
-                <span style={{ fontSize: "1.1rem" }}>📸</span>
-                Take Screenshot
-              </button>
-            </div>
-          </div>
-
-          {/* Export options removed */}
-
-          {/* Session 3: Build Animation */}
-          <div style={{ marginBottom: "30px" }}>
-            <h3
-              style={{
-                fontSize: "0.75rem",
-                textTransform: "uppercase",
-                color: colors.textMuted,
-                marginBottom: "15px",
-                letterSpacing: "1px",
-              }}
-            >
-              Build Animation
-            </h3>
-
-            <button
-              onClick={onToggleBuildAnimation}
-              style={{
-                background: isAnimating ? colors.accent : colors.buttonBg,
-                color: "white",
-                border: `1px solid ${colors.border} `,
-                padding: "12px",
-                borderRadius: "6px",
-                cursor: "pointer",
-                width: "100%",
-                textAlign: "center",
-                transition: "all 0.2s",
-                fontSize: "0.9rem",
-                fontWeight: "500",
-                marginBottom: "12px",
-              }}
-            >
-              {isAnimating ? "⏸️ Stop" : "▶️ Play"} Animation
-            </button>
-
-            <div style={{ marginTop: "12px" }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: "5px",
-                  fontSize: "0.85rem",
-                }}
-              >
-                <span>Speed</span>
-                <span style={{ fontFamily: "monospace", color: colors.accent }}>
-                  {animationSpeed}ms
-                </span>
-              </div>
-              <input
-                type="range"
-                min="10"
-                max="200"
-                step="10"
-                value={animationSpeed}
-                onChange={(e) => setAnimationSpeed(Number(e.target.value))}
-                style={{
-                  width: "100%",
-                  cursor: "pointer",
-                  accentColor: colors.accent,
-                }}
-              />
-              <div
-                style={{
-                  fontSize: "0.7rem",
-                  color: colors.textMuted,
-                  marginTop: "3px",
-                  textAlign: "center",
-                }}
-              >
-                {animationSpeed < 50
-                  ? "Fast"
-                  : animationSpeed < 100
-                    ? "Normal"
-                    : "Slow"}
-              </div>
-            </div>
-          </div>
-
-          {/* Recent Files removed */}
-
-          {/* Section: Help */}
-          <div className="staggered-child">
-            <h3
-              style={{
-                fontSize: "0.75rem",
-                textTransform: "uppercase",
-                color: colors.textMuted,
-                marginBottom: "15px",
-                letterSpacing: "1px",
-              }}
-            >
-              Keyboard Shortcuts
-            </h3>
-            <div
-              style={{
-                fontSize: "0.75rem",
-                color: colors.textMuted,
-                lineHeight: "1.8",
-              }}
-            >
-              <div>
-                <kbd
-                  style={{
-                    background: colors.buttonBg,
-                    padding: "2px 6px",
-                    borderRadius: "3px",
-                    fontFamily: "monospace",
-                  }}
-                >
-                  W
-                </kbd>{" "}
-                - Toggle Wireframe
-              </div>
-              <div>
-                <kbd
-                  style={{
-                    background: colors.buttonBg,
-                    padding: "2px 6px",
-                    borderRadius: "3px",
-                    fontFamily: "monospace",
-                  }}
-                >
-                  X
-                </kbd>{" "}
-                - Toggle X-Ray
-              </div>
-              <div>
-                <kbd
-                  style={{
-                    background: colors.buttonBg,
-                    padding: "2px 6px",
-                    borderRadius: "3px",
-                    fontFamily: "monospace",
-                  }}
-                >
-                  R
-                </kbd>{" "}
-                - Toggle Rotation
-              </div>
-              <div>
-                <kbd
-                  style={{
-                    background: colors.buttonBg,
-                    padding: "2px 6px",
-                    borderRadius: "3px",
-                    fontFamily: "monospace",
-                  }}
-                >
-                  Space
-                </kbd>{" "}
-                - Play/Stop Animation
-              </div>
-              <div>
-                <kbd
-                  style={{
-                    background: colors.buttonBg,
-                    padding: "2px 6px",
-                    borderRadius: "3px",
-                    fontFamily: "monospace",
-                  }}
-                >
-                  1-4
-                </kbd>{" "}
-                - Camera Presets
-              </div>
-              <div>
-                <kbd
-                  style={{
-                    background: colors.buttonBg,
-                    padding: "2px 6px",
-                    borderRadius: "3px",
-                    fontFamily: "monospace",
-                  }}
-                >
-                  Ctrl+S
-                </kbd>{" "}
-                - Screenshot
-              </div>
-            </div>
+          <div style={{ fontFamily: "monospace", fontSize: "0.82rem", lineHeight: 1.6 }}>
+            <div>Calls: {renderStats.calls}</div>
+            <div>Triangles: {renderStats.triangles.toLocaleString()}</div>
+            <div>Blocks: {sceneSummary.totalBlocks.toLocaleString()}</div>
+            <div>Instances: {sceneSummary.instances.toLocaleString()}</div>
+            <div>Chunks: {(sceneSummary.chunks || 0).toLocaleString()}</div>
+            <div>Hidden Faces: {(sceneSummary.culledFaces || 0).toLocaleString()}</div>
           </div>
         </div>
 
-        {/* Footer */}
-        <div
-          style={{
-            padding: "15px 20px",
-            borderTop: `1px solid ${colors.border} `,
-            fontSize: "0.7rem",
-            color: colors.textMuted,
-            textAlign: "center",
-          }}
-        >
-          Litematica Web Viewer v1.2
+        <div style={cardStyle}>
+          <div style={{ fontSize: "0.78rem", color: "#8eaef3", marginBottom: "8px" }}>
+            VIEW
+          </div>
+          <div style={{ marginBottom: "8px", fontSize: "0.82rem" }}>
+            Layer limit: {maxLayer}
+          </div>
+          <input
+            type="range"
+            min={layerBounds.min}
+            max={layerBounds.max}
+            value={maxLayer}
+            onChange={(event) => setMaxLayer(Number(event.target.value))}
+            style={{ width: "100%", accentColor: "#3f76e4" }}
+          />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "10px" }}>
+            {["front", "side", "top", "isometric"].map((preset) => (
+              <button
+                key={preset}
+                onClick={() => onCameraPreset(preset)}
+                style={{
+                  padding: "8px",
+                  borderRadius: "8px",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  background: "rgba(255,255,255,0.05)",
+                  color: "white",
+                  cursor: "pointer",
+                }}
+              >
+                {preset === "isometric" ? "Iso" : preset}
+              </button>
+            ))}
+          </div>
+          <label style={{ display: "flex", gap: "8px", marginTop: "10px", fontSize: "0.82rem" }}>
+            <input type="checkbox" checked={autoRotate} onChange={onToggleAutoRotate} />
+            Auto-rotate
+          </label>
+        </div>
+
+        <div style={cardStyle}>
+          <div style={{ fontSize: "0.78rem", color: "#8eaef3", marginBottom: "8px" }}>
+            PERFORMANCE
+          </div>
+          <label style={{ display: "flex", gap: "8px", fontSize: "0.82rem", marginBottom: "8px" }}>
+            <input type="checkbox" checked={adaptiveQuality} onChange={(event) => setAdaptiveQuality(event.target.checked)} />
+            Adaptive quality
+          </label>
+          <label style={{ display: "flex", gap: "8px", fontSize: "0.82rem", marginBottom: "8px" }}>
+            <input type="checkbox" checked={performanceMode} onChange={(event) => setPerformanceMode(event.target.checked)} />
+            Performance mode
+          </label>
+          <label style={{ display: "flex", gap: "8px", fontSize: "0.82rem", marginBottom: "12px" }}>
+            <input type="checkbox" checked={shadowsEnabled} onChange={(event) => setShadowsEnabled(event.target.checked)} />
+            Shadows
+          </label>
+          <div style={{ fontSize: "0.8rem", marginBottom: "6px" }}>
+            Ambient {ambientIntensity.toFixed(1)}
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="2"
+            step="0.1"
+            value={ambientIntensity}
+            onChange={(event) => setAmbientIntensity(Number(event.target.value))}
+            style={{ width: "100%", accentColor: "#3f76e4", marginBottom: "10px" }}
+          />
+          <div style={{ fontSize: "0.8rem", marginBottom: "6px" }}>
+            Directional {directionalIntensity.toFixed(1)}
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="3"
+            step="0.1"
+            value={directionalIntensity}
+            onChange={(event) => setDirectionalIntensity(Number(event.target.value))}
+            style={{ width: "100%", accentColor: "#3f76e4", marginBottom: "10px" }}
+          />
+          <select
+            value={environmentPreset}
+            onChange={(event) => setEnvironmentPreset(event.target.value)}
+            style={{
+              width: "100%",
+              padding: "8px",
+              borderRadius: "8px",
+              border: "1px solid rgba(255,255,255,0.08)",
+              background: "rgba(255,255,255,0.05)",
+              color: "white",
+            }}
+          >
+            <option value="dawn">Dawn</option>
+            <option value="city">Daylight</option>
+            <option value="sunset">Sunset</option>
+            <option value="night">Night</option>
+          </select>
+        </div>
+
+        <div style={cardStyle}>
+          <div style={{ fontSize: "0.78rem", color: "#8eaef3", marginBottom: "8px" }}>
+            ACTIONS
+          </div>
+          <button
+            onClick={onToggleMaterials}
+            style={{
+              width: "100%",
+              padding: "10px",
+              marginBottom: "8px",
+              borderRadius: "8px",
+              border: "1px solid rgba(255,255,255,0.08)",
+              background: showMaterials ? "#3f76e4" : "rgba(255,255,255,0.05)",
+              color: "white",
+              cursor: "pointer",
+            }}
+          >
+            Material list
+          </button>
+          <button
+            onClick={onScreenshot}
+            style={{
+              width: "100%",
+              padding: "10px",
+              marginBottom: "8px",
+              borderRadius: "8px",
+              border: "1px solid rgba(255,255,255,0.08)",
+              background: "rgba(255,255,255,0.05)",
+              color: "white",
+              cursor: "pointer",
+            }}
+          >
+            Screenshot
+          </button>
+          <button
+            onClick={onToggleBuildAnimation}
+            style={{
+              width: "100%",
+              padding: "10px",
+              borderRadius: "8px",
+              border: "1px solid rgba(255,255,255,0.08)",
+              background: isAnimating ? "#3f76e4" : "rgba(255,255,255,0.05)",
+              color: "white",
+              cursor: "pointer",
+            }}
+          >
+            {isAnimating ? "Stop" : "Play"} build animation
+          </button>
+          <div style={{ fontSize: "0.8rem", marginTop: "10px", marginBottom: "6px" }}>
+            Animation speed {animationSpeed}ms
+          </div>
+          <input
+            type="range"
+            min="10"
+            max="200"
+            step="10"
+            value={animationSpeed}
+            onChange={(event) => setAnimationSpeed(Number(event.target.value))}
+            style={{ width: "100%", accentColor: "#3f76e4" }}
+          />
         </div>
       </div>
     </>

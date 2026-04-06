@@ -1,5 +1,61 @@
-import * as THREE from 'three';
-import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils';
+import * as THREE from "three";
+import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUtils";
+
+const FACE_ORDER = ["east", "west", "up", "down", "south", "north"];
+const FACE_BITS = {
+  east: 1,
+  west: 2,
+  up: 4,
+  down: 8,
+  south: 16,
+  north: 32,
+};
+
+function createIndexedGeometryWithVisibleFaces(geometry, visibleFaces = 63) {
+  if (visibleFaces === 63 || !geometry.index) {
+    return geometry;
+  }
+
+  const baseIndex = geometry.index.array;
+  const filtered = [];
+
+  for (let faceIndex = 0; faceIndex < FACE_ORDER.length; faceIndex++) {
+    const faceName = FACE_ORDER[faceIndex];
+    const isVisible = (visibleFaces & FACE_BITS[faceName]) !== 0;
+
+    if (!isVisible) continue;
+
+    const start = faceIndex * 6;
+    for (let i = 0; i < 6; i++) {
+      filtered.push(baseIndex[start + i]);
+    }
+  }
+
+  if (filtered.length === 0) {
+    geometry.dispose();
+    return null;
+  }
+
+  geometry.setIndex(filtered);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function isSimpleFullCube(element) {
+  if (!element || element.rotation) return false;
+
+  const isFullBounds =
+    element.from?.[0] === 0 &&
+    element.from?.[1] === 0 &&
+    element.from?.[2] === 0 &&
+    element.to?.[0] === 16 &&
+    element.to?.[1] === 16 &&
+    element.to?.[2] === 16;
+
+  if (!isFullBounds) return false;
+
+  return FACE_ORDER.every((face) => element.faces?.[face]);
+}
 
 export class GeometryBuilder {
   /**
@@ -7,14 +63,25 @@ export class GeometryBuilder {
    * IMPROVEMENT: Rotations (x, y) are NOT baked into the geometry here anymore
    * if we want to move them to the instance matrix.
    */
-  static async build(variants, assetLoader, bakeVariantRotation = true) {
+  static async build(
+    variants,
+    assetLoader,
+    bakeVariantRotation = true,
+    visibleFaces = 63,
+  ) {
     const geometries = [];
 
     for (const entry of variants) {
       const modelData = await assetLoader.getModel(entry.model);
       if (!modelData || !modelData.elements) continue;
 
-      const modelGeometries = await this.buildModelGeometries(modelData, entry, assetLoader, bakeVariantRotation);
+      const modelGeometries = await this.buildModelGeometries(
+        modelData,
+        entry,
+        assetLoader,
+        bakeVariantRotation,
+        visibleFaces,
+      );
       geometries.push(...modelGeometries);
     }
 
@@ -23,35 +90,54 @@ export class GeometryBuilder {
     return BufferGeometryUtils.mergeGeometries(geometries);
   }
 
-  static async buildModelGeometries(modelData, entry, assetLoader, bakeVariantRotation) {
+  static async buildModelGeometries(
+    modelData,
+    entry,
+    assetLoader,
+    bakeVariantRotation,
+    visibleFaces,
+  ) {
     const { x = 0, y = 0 } = entry;
     const resultGeometries = [];
 
     for (const element of modelData.elements) {
       const { from, to, faces, rotation } = element;
       const size = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];
-      const center = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2, (from[2] + to[2]) / 2];
+      const center = [
+        (from[0] + to[0]) / 2,
+        (from[1] + to[1]) / 2,
+        (from[2] + to[2]) / 2,
+      ];
 
       let geometry = new THREE.BoxGeometry(size[0], size[1], size[2]);
       geometry.translate(center[0] - 8, center[1] - 8, center[2] - 8);
-      geometry.scale(1/16, 1/16, 1/16);
+      geometry.scale(1 / 16, 1 / 16, 1 / 16);
+
+      if (isSimpleFullCube(element)) {
+        geometry = createIndexedGeometryWithVisibleFaces(geometry, visibleFaces);
+        if (!geometry) continue;
+      }
 
       // Element rotation (baked)
       if (rotation) {
         const { origin, axis, angle, rescale } = rotation;
         const rad = (angle * Math.PI) / 180;
-        const pivot = new THREE.Vector3((origin[0] - 8) / 16, (origin[1] - 8) / 16, (origin[2] - 8) / 16);
-        
+        const pivot = new THREE.Vector3(
+          (origin[0] - 8) / 16,
+          (origin[1] - 8) / 16,
+          (origin[2] - 8) / 16,
+        );
+
         geometry.translate(-pivot.x, -pivot.y, -pivot.z);
-        if (axis === 'x') geometry.rotateX(rad);
-        else if (axis === 'y') geometry.rotateY(rad);
-        else if (axis === 'z') geometry.rotateZ(rad);
+        if (axis === "x") geometry.rotateX(rad);
+        else if (axis === "y") geometry.rotateY(rad);
+        else if (axis === "z") geometry.rotateZ(rad);
 
         if (rescale) {
           const scale = 1 / Math.cos(rad);
-          if (axis === 'x') geometry.scale(1, scale, scale);
-          else if (axis === 'y') geometry.scale(scale, 1, scale);
-          else if (axis === 'z') geometry.scale(scale, scale, 1);
+          if (axis === "x") geometry.scale(1, scale, scale);
+          else if (axis === "y") geometry.scale(scale, 1, scale);
+          else if (axis === "z") geometry.scale(scale, scale, 1);
         }
         geometry.translate(pivot.x, pivot.y, pivot.z);
       }
@@ -65,10 +151,9 @@ export class GeometryBuilder {
       // UV Mapping using Atlas
       if (faces) {
         const uvAttribute = geometry.attributes.uv;
-        const faceOrder = ['east', 'west', 'up', 'down', 'south', 'north'];
         
-        for (let i = 0; i < faceOrder.length; i++) {
-          const side = faceOrder[i];
+        for (let i = 0; i < FACE_ORDER.length; i++) {
+          const side = FACE_ORDER[i];
           const faceData = faces[side];
           if (!faceData) {
             // Hide face by collapsing UVs
@@ -81,8 +166,8 @@ export class GeometryBuilder {
 
           let uv = faceData.uv;
           if (!uv) {
-            if (side === 'up' || side === 'down') uv = [from[0], from[2], to[0], to[2]];
-            else if (side === 'south' || side === 'north') uv = [from[0], from[1], to[0], to[1]];
+            if (side === "up" || side === "down") uv = [from[0], from[2], to[0], to[2]];
+            else if (side === "south" || side === "north") uv = [from[0], from[1], to[0], to[1]];
             else uv = [from[2], from[1], to[2], to[1]];
           }
 
