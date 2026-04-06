@@ -10,6 +10,55 @@ const FACE_BITS = {
   south: 16,
   north: 32,
 };
+const FACE_NORMALS = {
+  east: new THREE.Vector3(1, 0, 0),
+  west: new THREE.Vector3(-1, 0, 0),
+  up: new THREE.Vector3(0, 1, 0),
+  down: new THREE.Vector3(0, -1, 0),
+  south: new THREE.Vector3(0, 0, 1),
+  north: new THREE.Vector3(0, 0, -1),
+};
+
+function normalToFaceName(normal) {
+  const absX = Math.abs(normal.x);
+  const absY = Math.abs(normal.y);
+  const absZ = Math.abs(normal.z);
+
+  if (absX >= absY && absX >= absZ) {
+    return normal.x >= 0 ? "east" : "west";
+  }
+
+  if (absY >= absX && absY >= absZ) {
+    return normal.y >= 0 ? "up" : "down";
+  }
+
+  return normal.z >= 0 ? "south" : "north";
+}
+
+function remapVisibleFacesForVariant(visibleFaces = 63, x = 0, y = 0) {
+  if (visibleFaces === 63 || (x === 0 && y === 0)) {
+    return visibleFaces;
+  }
+
+  const rotationMatrix = new THREE.Matrix4()
+    .makeRotationY((-y * Math.PI) / 180)
+    .multiply(new THREE.Matrix4().makeRotationX((-x * Math.PI) / 180));
+
+  let localVisibleFaces = 0;
+
+  for (const faceName of FACE_ORDER) {
+    const worldNormal = FACE_NORMALS[faceName]
+      .clone()
+      .applyMatrix4(rotationMatrix);
+    const rotatedFaceName = normalToFaceName(worldNormal);
+
+    if ((visibleFaces & FACE_BITS[rotatedFaceName]) !== 0) {
+      localVisibleFaces |= FACE_BITS[faceName];
+    }
+  }
+
+  return localVisibleFaces;
+}
 
 function createIndexedGeometryWithVisibleFaces(geometry, visibleFaces = 63) {
   if (visibleFaces === 63 || !geometry.index) {
@@ -99,6 +148,7 @@ export class GeometryBuilder {
   ) {
     const { x = 0, y = 0 } = entry;
     const resultGeometries = [];
+    const localVisibleFaces = remapVisibleFacesForVariant(visibleFaces, x, y);
 
     for (const element of modelData.elements) {
       const { from, to, faces, rotation } = element;
@@ -114,7 +164,10 @@ export class GeometryBuilder {
       geometry.scale(1 / 16, 1 / 16, 1 / 16);
 
       if (isSimpleFullCube(element)) {
-        geometry = createIndexedGeometryWithVisibleFaces(geometry, visibleFaces);
+        geometry = createIndexedGeometryWithVisibleFaces(
+          geometry,
+          localVisibleFaces,
+        );
         if (!geometry) continue;
       }
 
