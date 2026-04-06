@@ -4,6 +4,12 @@ import React, { useState } from "react";
 
 export function Sidebar({
   renderBackend,
+  renderStats,
+  sceneSummary,
+  performanceMode,
+  setPerformanceMode,
+  adaptiveQuality,
+  setAdaptiveQuality,
   maxLayer,
   setMaxLayer,
   layerBounds,
@@ -400,6 +406,120 @@ export function Sidebar({
                 />
                 X-Ray Mode
               </label>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: "30px" }} className="staggered-child">
+            <h3
+              style={{
+                fontSize: "0.75rem",
+                textTransform: "uppercase",
+                color: colors.textMuted,
+                marginBottom: "15px",
+                letterSpacing: "1px",
+              }}
+            >
+              Performance
+            </h3>
+
+            <div
+              style={{
+                background: colors.buttonBg,
+                padding: "12px",
+                borderRadius: "6px",
+                border: `1px solid ${colors.border} `,
+                display: "grid",
+                gap: "10px",
+              }}
+            >
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  cursor: "pointer",
+                  fontSize: "0.85rem",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={adaptiveQuality}
+                  onChange={(e) => setAdaptiveQuality(e.target.checked)}
+                  style={{ cursor: "pointer", accentColor: colors.accent }}
+                />
+                Adaptive Quality
+              </label>
+
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  cursor: "pointer",
+                  fontSize: "0.85rem",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={performanceMode}
+                  onChange={(e) => setPerformanceMode(e.target.checked)}
+                  style={{ cursor: "pointer", accentColor: colors.accent }}
+                />
+                Performance Mode
+              </label>
+
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  cursor: "pointer",
+                  fontSize: "0.85rem",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={shadowsEnabled}
+                  onChange={(e) => setShadowsEnabled(e.target.checked)}
+                  style={{ cursor: "pointer", accentColor: colors.accent }}
+                />
+                Shadows
+              </label>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: "30px" }} className="staggered-child">
+            <h3
+              style={{
+                fontSize: "0.75rem",
+                textTransform: "uppercase",
+                color: colors.textMuted,
+                marginBottom: "15px",
+                letterSpacing: "1px",
+              }}
+            >
+              Live Stats
+            </h3>
+
+            <div
+              style={{
+                background: colors.buttonBg,
+                padding: "12px",
+                borderRadius: "6px",
+                border: `1px solid ${colors.border} `,
+                display: "grid",
+                gap: "6px",
+                fontSize: "0.8rem",
+                color: colors.textSecondary,
+                fontFamily: "monospace",
+              }}
+            >
+              <div>Calls: {renderStats.calls}</div>
+              <div>Triangles: {renderStats.triangles.toLocaleString()}</div>
+              <div>Geometries: {renderStats.geometries}</div>
+              <div>Textures: {renderStats.textures}</div>
+              <div>Blocks: {sceneSummary.totalBlocks.toLocaleString()}</div>
+              <div>Instances: {sceneSummary.instances.toLocaleString()}</div>
             </div>
           </div>
 

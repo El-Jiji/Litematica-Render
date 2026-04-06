@@ -10,7 +10,7 @@ import React, {
   useCallback,
   startTransition,
 } from "react";
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter";
 import { OrbitControls, Environment } from "@react-three/drei";
 import * as THREE from "three";
@@ -18,6 +18,9 @@ import { MaterialList } from "./MaterialList";
 import { Sidebar } from "./Sidebar";
 import bgImage from "../assets/bg.png";
 import { resourceManager } from "../utils/engine/ResourceManager";
+
+const VIEWER_PREFERENCES_KEY = "litematica-viewer-preferences";
+const LARGE_BUILD_THRESHOLD = 25000;
 
 async function createBestAvailableRenderer(defaultProps, setRenderBackend) {
   const rendererOptions = {
@@ -44,6 +47,31 @@ async function createBestAvailableRenderer(defaultProps, setRenderBackend) {
   return renderer;
 }
 
+function loadViewerPreferences() {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(VIEWER_PREFERENCES_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (error) {
+    console.warn("[Viewer] Failed to read viewer preferences.", error);
+    return null;
+  }
+}
+
+function saveViewerPreferences(preferences) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(
+      VIEWER_PREFERENCES_KEY,
+      JSON.stringify(preferences),
+    );
+  } catch (error) {
+    console.warn("[Viewer] Failed to persist viewer preferences.", error);
+  }
+}
+
 class TextureErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -62,7 +90,7 @@ class TextureErrorBoundary extends React.Component {
   }
 }
 
-function BatchedBlocks({ sceneGroups, maxLayer, xrayMode }) {
+function BatchedBlocks({ sceneGroups, maxLayer, xrayMode, onBuildStateChange }) {
   const meshRef = useRef();
   const populatedSignatureRef = useRef(null);
   const [batchedConfig, setBatchedConfig] = useState(null);
@@ -103,7 +131,21 @@ function BatchedBlocks({ sceneGroups, maxLayer, xrayMode }) {
   useEffect(() => {
     const processGroups = async () => {
       const names = Object.keys(sceneGroups);
-      if (names.length === 0) return;
+      if (names.length === 0) {
+        onBuildStateChange?.({
+          stage: "idle",
+          progress: 100,
+          visible: false,
+          instanceCount: 0,
+        });
+        return;
+      }
+
+      onBuildStateChange?.({
+        stage: "Resolving block states",
+        progress: 10,
+        visible: true,
+      });
 
       const stateMap = new Map();
       const statePromises = [];
@@ -126,6 +168,11 @@ function BatchedBlocks({ sceneGroups, maxLayer, xrayMode }) {
       }
 
       await Promise.all(statePromises);
+      onBuildStateChange?.({
+        stage: "Building batched geometry",
+        progress: 55,
+        visible: true,
+      });
 
       const uniqueGeosMap = new Map(); // geoUuid -> { geometry, id }
       const allInstances = [];
@@ -165,10 +212,17 @@ function BatchedBlocks({ sceneGroups, maxLayer, xrayMode }) {
         uniqueGeometries: Array.from(uniqueGeosMap.values()),
         allInstances
       });
+
+      onBuildStateChange?.({
+        stage: "Uploading scene",
+        progress: 85,
+        visible: true,
+        instanceCount: allInstances.length,
+      });
     };
 
     processGroups();
-  }, [sceneGroups]);
+  }, [sceneGroups, onBuildStateChange]);
 
   const batchedSignature = useMemo(() => {
     if (!batchedConfig) return null;
@@ -227,7 +281,13 @@ function BatchedBlocks({ sceneGroups, maxLayer, xrayMode }) {
     });
 
     populatedSignatureRef.current = batchedSignature;
-  }, [batchedConfig, batchedSignature, maxLayer]);
+    onBuildStateChange?.({
+      stage: "Ready",
+      progress: 100,
+      visible: false,
+      instanceCount: batchedConfig.allInstances.length,
+    });
+  }, [batchedConfig, batchedSignature, maxLayer, onBuildStateChange]);
 
   // Update visibility on maxLayer change
   useEffect(() => {
@@ -259,15 +319,40 @@ function BatchedBlocks({ sceneGroups, maxLayer, xrayMode }) {
   );
 }
 
-function SceneContent({ sceneGroups, maxLayer, xrayMode }) {
+function SceneContent({ sceneGroups, maxLayer, xrayMode, onBuildStateChange }) {
   // Simple wrapper to use the new BatchedBlocks
   return (
     <BatchedBlocks 
       sceneGroups={sceneGroups} 
       maxLayer={maxLayer} 
       xrayMode={xrayMode} 
+      onBuildStateChange={onBuildStateChange}
     />
   );
+}
+
+function RendererStatsTracker({ onStats }) {
+  const lastUpdateRef = useRef(0);
+
+  useFrame(({ gl, scene }) => {
+    const now = performance.now();
+    if (now - lastUpdateRef.current < 250) return;
+
+    lastUpdateRef.current = now;
+    const { render, memory } = gl.info;
+
+    onStats({
+      calls: render.calls,
+      triangles: render.triangles,
+      lines: render.lines,
+      points: render.points,
+      geometries: memory.geometries,
+      textures: memory.textures,
+      objects: scene.children.length,
+    });
+  });
+
+  return null;
 }
 
 // Camera controller component to handle camera position updates
@@ -324,7 +409,42 @@ export function Viewer({ data }) {
   // Session 4: X-Ray and UX
   const [xrayMode, setXrayMode] = useState(false);
   const [renderBackend, setRenderBackend] = useState("detecting");
+  const [renderStats, setRenderStats] = useState({
+    calls: 0,
+    triangles: 0,
+    lines: 0,
+    points: 0,
+    geometries: 0,
+    textures: 0,
+    objects: 0,
+  });
+  const [buildState, setBuildState] = useState({
+    stage: "Idle",
+    progress: 0,
+    visible: false,
+    instanceCount: 0,
+  });
+  const [performanceMode, setPerformanceMode] = useState(false);
+  const [adaptiveQuality, setAdaptiveQuality] = useState(true);
   const frameLoopMode = autoRotate || isAnimating ? "always" : "demand";
+  const preferencesHydratedRef = useRef(false);
+
+  const totalBlockCount = useMemo(
+    () =>
+      Object.values(data?.regions || {}).reduce(
+        (count, region) => count + (region.blocks?.length || 0),
+        0,
+      ),
+    [data],
+  );
+
+  const sceneSummary = useMemo(
+    () => ({
+      totalBlocks: totalBlockCount,
+      instances: buildState.instanceCount || 0,
+    }),
+    [buildState.instanceCount, totalBlockCount],
+  );
 
   const handleRendererDetected = useCallback((backend) => {
     startTransition(() => {
@@ -337,6 +457,104 @@ export function Viewer({ data }) {
       createBestAvailableRenderer(defaultProps, handleRendererDetected),
     [handleRendererDetected],
   );
+
+  useEffect(() => {
+    const storedPreferences = loadViewerPreferences();
+    if (!storedPreferences) {
+      preferencesHydratedRef.current = true;
+      return;
+    }
+
+    if (typeof storedPreferences.performanceMode === "boolean") {
+      setPerformanceMode(storedPreferences.performanceMode);
+    }
+    if (typeof storedPreferences.adaptiveQuality === "boolean") {
+      setAdaptiveQuality(storedPreferences.adaptiveQuality);
+    }
+    if (typeof storedPreferences.shadowsEnabled === "boolean") {
+      setShadowsEnabled(storedPreferences.shadowsEnabled);
+    }
+    if (typeof storedPreferences.ambientIntensity === "number") {
+      setAmbientIntensity(storedPreferences.ambientIntensity);
+    }
+    if (typeof storedPreferences.directionalIntensity === "number") {
+      setDirectionalIntensity(storedPreferences.directionalIntensity);
+    }
+    if (typeof storedPreferences.environmentPreset === "string") {
+      setEnvironmentPreset(storedPreferences.environmentPreset);
+    }
+
+    preferencesHydratedRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!preferencesHydratedRef.current) return;
+
+    saveViewerPreferences({
+      performanceMode,
+      adaptiveQuality,
+      shadowsEnabled,
+      ambientIntensity,
+      directionalIntensity,
+      environmentPreset,
+    });
+  }, [
+    adaptiveQuality,
+    ambientIntensity,
+    directionalIntensity,
+    environmentPreset,
+    performanceMode,
+    shadowsEnabled,
+  ]);
+
+  useEffect(() => {
+    if (!adaptiveQuality || !totalBlockCount) return;
+
+    const shouldEnablePerformanceMode =
+      totalBlockCount >= LARGE_BUILD_THRESHOLD || renderBackend === "webgpu";
+
+    setPerformanceMode(shouldEnablePerformanceMode);
+    setShadowsEnabled(!shouldEnablePerformanceMode);
+    setAmbientIntensity(shouldEnablePerformanceMode ? 0.75 : 0.6);
+    setDirectionalIntensity(shouldEnablePerformanceMode ? 0.85 : 1.0);
+    setEnvironmentPreset(shouldEnablePerformanceMode ? "dawn" : "city");
+  }, [adaptiveQuality, renderBackend, totalBlockCount]);
+
+  const handleBuildStateChange = useCallback((nextState) => {
+    setBuildState((current) => ({ ...current, ...nextState }));
+  }, []);
+
+  const handleRenderStats = useCallback((nextStats) => {
+    setRenderStats((current) => {
+      if (
+        current.calls === nextStats.calls &&
+        current.triangles === nextStats.triangles &&
+        current.lines === nextStats.lines &&
+        current.points === nextStats.points &&
+        current.geometries === nextStats.geometries &&
+        current.textures === nextStats.textures &&
+        current.objects === nextStats.objects
+      ) {
+        return current;
+      }
+
+      return nextStats;
+    });
+  }, []);
+
+  const handlePerformanceModeChange = useCallback((enabled) => {
+    setPerformanceMode(enabled);
+
+    if (enabled) {
+      setShadowsEnabled(false);
+      setAmbientIntensity(0.75);
+      setDirectionalIntensity(0.85);
+    }
+  }, []);
+
+  const handleAdaptiveQualityChange = useCallback((enabled) => {
+    setAdaptiveQuality(enabled);
+  }, []);
 
   // Calculate Initial Bounds and Center
   useEffect(() => {
@@ -653,6 +871,7 @@ export function Viewer({ data }) {
 
       <Canvas
         camera={{ position: cameraPosition, fov: 50, near: 0.01, far: 10000 }}
+        dpr={performanceMode ? 1 : [1, 2]}
         frameloop={frameLoopMode}
         gl={createRenderer}
         style={{ position: "relative", zIndex: 1 }}
@@ -673,10 +892,12 @@ export function Viewer({ data }) {
               sceneGroups={groups}
               maxLayer={maxLayer}
               xrayMode={xrayMode}
+              onBuildStateChange={handleBuildStateChange}
             />
           </group>
         </Suspense>
 
+        <RendererStatsTracker onStats={handleRenderStats} />
         <CameraController position={cameraPosition} target={modelCenter} />
         <OrbitControls
           ref={controlsRef}
@@ -685,11 +906,65 @@ export function Viewer({ data }) {
           autoRotate={autoRotate}
           autoRotateSpeed={4.0}
         />
-        <Environment preset={environmentPreset} />
+        {!performanceMode && <Environment preset={environmentPreset} />}
       </Canvas>
+
+      {buildState.visible && (
+        <div
+          style={{
+            position: "absolute",
+            left: "50%",
+            bottom: "24px",
+            transform: "translateX(-50%)",
+            zIndex: 115,
+            width: "min(480px, calc(100vw - 32px))",
+            padding: "14px 16px",
+            borderRadius: "14px",
+            background: "rgba(10, 12, 20, 0.86)",
+            border: "1px solid rgba(120, 160, 255, 0.2)",
+            color: "#f5f7ff",
+            backdropFilter: "blur(12px)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              fontSize: "0.82rem",
+              marginBottom: "8px",
+            }}
+          >
+            <span>{buildState.stage}</span>
+            <span>{Math.round(buildState.progress)}%</span>
+          </div>
+          <div
+            style={{
+              height: "8px",
+              borderRadius: "999px",
+              background: "rgba(255,255,255,0.08)",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                width: `${buildState.progress}%`,
+                height: "100%",
+                background:
+                  "linear-gradient(90deg, rgba(63,118,228,1) 0%, rgba(121,195,255,1) 100%)",
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       <Sidebar
         renderBackend={renderBackend}
+        renderStats={renderStats}
+        sceneSummary={sceneSummary}
+        performanceMode={performanceMode}
+        setPerformanceMode={handlePerformanceModeChange}
+        adaptiveQuality={adaptiveQuality}
+        setAdaptiveQuality={handleAdaptiveQualityChange}
         maxLayer={maxLayer}
         setMaxLayer={setMaxLayer}
         layerBounds={layerBounds}

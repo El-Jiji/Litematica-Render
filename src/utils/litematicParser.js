@@ -1,6 +1,24 @@
 import nbt from "nbt";
 import pako from "pako";
 
+const AIR_BLOCKS = new Set([
+  "minecraft:air",
+  "minecraft:cave_air",
+  "minecraft:void_air",
+]);
+
+const LONG_BITS = 64n;
+
+function toUnsignedLong(value) {
+  if (Array.isArray(value)) {
+    const upper = BigInt(value[0] >>> 0);
+    const lower = BigInt(value[1] >>> 0);
+    return BigInt.asUintN(64, (upper << 32n) | lower);
+  }
+
+  return BigInt.asUintN(64, BigInt(value));
+}
+
 export const parseLitematic = async (file) => {
   const arrayBuffer = await file.arrayBuffer();
   const uint8Array = new Uint8Array(arrayBuffer);
@@ -77,11 +95,7 @@ export const parseLitematic = async (file) => {
       // Special case: Palette size 1 -> 0 bits per entry, no BlockStates needed.
       if (palette.length === 1) {
         const state = palette[0];
-        if (
-          state.name !== "minecraft:air" &&
-          state.name !== "minecraft:cave_air" &&
-          state.name !== "minecraft:void_air"
-        ) {
+        if (!AIR_BLOCKS.has(state.name)) {
           for (let x = 0; x < size.x; x++) {
             for (let y = 0; y < size.y; y++) {
               for (let z = 0; z < size.z; z++) {
@@ -91,15 +105,8 @@ export const parseLitematic = async (file) => {
           }
         }
       } else if (blockStates) {
-        // nbt.js handles longs as [upper, lower] 32-bit integers
-        const longArray = blockStates.map((l) => {
-          if (Array.isArray(l)) {
-            // Combine high and low 32-bit integers into a 64-bit BigInt
-            // We use >>> 0 on low bit to ensure it's treated as unsigned
-            return (BigInt(l[0]) << 32n) | BigInt(l[1] >>> 0);
-          }
-          return BigInt(l);
-        });
+        // Normalize every packed long to an unsigned 64-bit bigint.
+        const longArray = blockStates.map(toUnsignedLong);
 
         const totalBlocks = size.x * size.y * size.z;
         const indices = new Int32Array(totalBlocks);
@@ -115,7 +122,7 @@ export const parseLitematic = async (file) => {
 
         if (is1_16) {
           for (let i = 0; i < longArray.length; i++) {
-            let currentLong = longArray[i];
+            const currentLong = longArray[i];
             for (
               let bit = 0;
               bit < valuesPerLong && index < totalBlocks;
@@ -133,19 +140,25 @@ export const parseLitematic = async (file) => {
             const startLongIndex = Number(startBit / 64n);
             const startOffset = Number(startBit % 64n);
             const endBit = startBit + BigInt(bitsPerEntry) - 1n;
-            const endLongIndex = Number(endBit / 64n);
+            const endLongIndex = Number(endBit / LONG_BITS);
 
             if (startLongIndex >= longArray.length) break;
 
-            let val = longArray[startLongIndex] >> BigInt(startOffset);
+            let val = BigInt.asUintN(
+              64,
+              longArray[startLongIndex] >> BigInt(startOffset),
+            );
 
             if (
               endLongIndex > startLongIndex &&
               endLongIndex < longArray.length
             ) {
               const bitsFromFirst = 64 - startOffset;
-              const val2 = longArray[endLongIndex];
-              val |= val2 << BigInt(bitsFromFirst);
+              const val2 = BigInt.asUintN(
+                64,
+                longArray[endLongIndex] << BigInt(bitsFromFirst),
+              );
+              val = BigInt.asUintN(64, val | val2);
             }
 
             indices[i] = Number(val & mask);
@@ -160,12 +173,7 @@ export const parseLitematic = async (file) => {
               if (idx < indices.length) {
                 const paletteIndex = indices[idx++];
                 const state = palette[paletteIndex];
-                if (
-                  state &&
-                  state.name !== "minecraft:air" &&
-                  state.name !== "minecraft:cave_air" &&
-                  state.name !== "minecraft:void_air"
-                ) {
+                if (state && !AIR_BLOCKS.has(state.name)) {
                   blocks.push({
                     x,
                     y,
