@@ -24,6 +24,49 @@ const INITIAL_CHUNK_BATCH = 8;
 const PROGRESSIVE_CHUNK_BATCH = 6;
 const CHUNK_BATCH_INTERVAL_MS = 120;
 
+function syncRendererDrawingBuffer(
+  renderer,
+  canvas,
+  width,
+  height,
+  pixelRatio,
+) {
+  if (!renderer || !canvas || !width || !height) return;
+
+  const safeWidth = Math.max(1, Math.round(width));
+  const safeHeight = Math.max(1, Math.round(height));
+  const safePixelRatio = Math.max(1, pixelRatio || 1);
+
+  if (typeof renderer.setPixelRatio === "function") {
+    renderer.setPixelRatio(safePixelRatio);
+  }
+
+  if (typeof renderer.setDrawingBufferSize === "function") {
+    renderer.setDrawingBufferSize(safeWidth, safeHeight, safePixelRatio);
+  } else if (typeof renderer.setSize === "function") {
+    renderer.setSize(safeWidth, safeHeight, false);
+  }
+
+  if (typeof renderer.setViewport === "function") {
+    renderer.setViewport(0, 0, safeWidth, safeHeight);
+  }
+
+  if (typeof renderer.setScissor === "function") {
+    renderer.setScissor(0, 0, safeWidth, safeHeight);
+  }
+
+  if (typeof renderer.setScissorTest === "function") {
+    renderer.setScissorTest(false);
+  }
+
+  if (canvas.style.width !== `${safeWidth}px`) {
+    canvas.style.width = `${safeWidth}px`;
+  }
+  if (canvas.style.height !== `${safeHeight}px`) {
+    canvas.style.height = `${safeHeight}px`;
+  }
+}
+
 async function createBestAvailableRenderer(defaultProps, setRenderBackend) {
   const rendererOptions = {
     ...defaultProps,
@@ -31,12 +74,36 @@ async function createBestAvailableRenderer(defaultProps, setRenderBackend) {
     alpha: true,
     preserveDrawingBuffer: true,
   };
+  const canvas = defaultProps.canvas;
+  const initialWidth =
+    canvas?.clientWidth ||
+    canvas?.parentElement?.clientWidth ||
+    window.innerWidth;
+  const initialHeight =
+    canvas?.clientHeight ||
+    canvas?.parentElement?.clientHeight ||
+    window.innerHeight;
+  const initialPixelRatio = window.devicePixelRatio || 1;
 
   if (typeof navigator !== "undefined" && "gpu" in navigator) {
     try {
       const { WebGPURenderer } = await import("three/webgpu");
       const renderer = new WebGPURenderer(rendererOptions);
+      syncRendererDrawingBuffer(
+        renderer,
+        canvas,
+        initialWidth,
+        initialHeight,
+        initialPixelRatio,
+      );
       await renderer.init();
+      syncRendererDrawingBuffer(
+        renderer,
+        canvas,
+        initialWidth,
+        initialHeight,
+        initialPixelRatio,
+      );
       startTransition(() => setRenderBackend("webgpu"));
       return renderer;
     } catch (error) {
@@ -45,6 +112,13 @@ async function createBestAvailableRenderer(defaultProps, setRenderBackend) {
   }
 
   const renderer = new THREE.WebGLRenderer(rendererOptions);
+  syncRendererDrawingBuffer(
+    renderer,
+    canvas,
+    initialWidth,
+    initialHeight,
+    initialPixelRatio,
+  );
   startTransition(() => setRenderBackend("webgl"));
   return renderer;
 }
@@ -74,12 +148,7 @@ function saveViewerPreferences(preferences) {
   }
 }
 
-function ChunkMesh({
-  chunk,
-  maxLayer,
-  modelCenter,
-  onChunkBuilt,
-}) {
+function ChunkMesh({ chunk, maxLayer, modelCenter, onChunkBuilt }) {
   const groupRef = useRef(null);
   const meshRef = useRef(null);
   const populatedSignatureRef = useRef(null);
@@ -262,7 +331,14 @@ function ChunkMesh({
     populatedSignatureRef.current = batchedSignature;
     onChunkBuilt?.(chunk.id, batchedConfig.allInstances.length);
     invalidate();
-  }, [batchedConfig, batchedSignature, chunk.id, invalidate, maxLayer, onChunkBuilt]);
+  }, [
+    batchedConfig,
+    batchedSignature,
+    chunk.id,
+    invalidate,
+    maxLayer,
+    onChunkBuilt,
+  ]);
 
   useEffect(() => {
     if (!meshRef.current || !batchedConfig) return;
@@ -340,12 +416,7 @@ function ChunkMesh({
   );
 }
 
-function SceneContent({
-  chunks,
-  maxLayer,
-  modelCenter,
-  onChunkBuilt,
-}) {
+function SceneContent({ chunks, maxLayer, modelCenter, onChunkBuilt }) {
   return (
     <>
       {chunks.map((chunk) => (
@@ -385,14 +456,117 @@ function RendererStatsTracker({ onStats }) {
   return null;
 }
 
-function CameraController({ position }) {
-  const { camera } = useThree();
+function RendererResizeSync() {
+  const { gl, camera, size, viewport, invalidate } = useThree();
 
-  useEffect(() => {
-    if (position) {
-      camera.position.set(position[0], position[1], position[2]);
+  useLayoutEffect(() => {
+    const canvas = gl?.domElement;
+    if (!canvas || !size.width || !size.height) return;
+
+    let frameId = 0;
+    let resizeObserver = null;
+
+    const syncRendererSize = () => {
+      const clientWidth = Math.max(
+        1,
+        Math.round(
+          canvas.parentElement?.clientWidth || canvas.clientWidth || size.width,
+        ),
+      );
+      const clientHeight = Math.max(
+        1,
+        Math.round(
+          canvas.parentElement?.clientHeight ||
+            canvas.clientHeight ||
+            size.height,
+        ),
+      );
+      syncRendererDrawingBuffer(
+        gl,
+        canvas,
+        clientWidth,
+        clientHeight,
+        viewport.dpr,
+      );
+
+      if (camera?.isPerspectiveCamera) {
+        const nextAspect = clientWidth / clientHeight;
+        if (Number.isFinite(nextAspect) && camera.aspect !== nextAspect) {
+          camera.aspect = nextAspect;
+          camera.updateProjectionMatrix();
+        }
+      }
+
+      invalidate();
+    };
+
+    syncRendererSize();
+    frameId = window.requestAnimationFrame(syncRendererSize);
+    if (typeof ResizeObserver !== "undefined" && canvas.parentElement) {
+      resizeObserver = new ResizeObserver(() => {
+        syncRendererSize();
+      });
+      resizeObserver.observe(canvas.parentElement);
     }
-  }, [position, camera]);
+
+    return () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId);
+      }
+      resizeObserver?.disconnect();
+    };
+  }, [camera, gl, invalidate, size.height, size.width, viewport.dpr]);
+
+  return null;
+}
+
+function CameraController({ position, target, controlsRef }) {
+  const { camera, size, invalidate } = useThree();
+
+  useLayoutEffect(() => {
+    if (!position || !target) return;
+
+    camera.position.set(position[0], position[1], position[2]);
+
+    if (camera?.isPerspectiveCamera) {
+      const nextAspect =
+        size.width && size.height ? size.width / size.height : 1;
+      if (Number.isFinite(nextAspect) && nextAspect > 0) {
+        camera.aspect = nextAspect;
+      }
+    }
+
+    camera.lookAt(target[0], target[1], target[2]);
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld();
+
+    if (controlsRef?.current) {
+      controlsRef.current.target.set(target[0], target[1], target[2]);
+      controlsRef.current.update();
+    }
+
+    invalidate();
+    const frameId = window.requestAnimationFrame(() => {
+      if (controlsRef?.current) {
+        controlsRef.current.target.set(target[0], target[1], target[2]);
+        controlsRef.current.update();
+      }
+      camera.lookAt(target[0], target[1], target[2]);
+      camera.updateProjectionMatrix();
+      camera.updateMatrixWorld();
+      invalidate();
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [
+    camera,
+    controlsRef,
+    invalidate,
+    position,
+    size.height,
+    size.width,
+    target,
+  ]);
 
   return null;
 }
@@ -484,6 +658,18 @@ export function Viewer({ data }) {
     [handleRendererDetected],
   );
 
+  const handleCanvasCreated = useCallback((state) => {
+    const canvas = state.gl?.domElement;
+    syncRendererDrawingBuffer(
+      state.gl,
+      canvas,
+      state.size.width,
+      state.size.height,
+      state.viewport.dpr,
+    );
+    state.invalidate();
+  }, []);
+
   useEffect(() => {
     const storedPreferences = loadViewerPreferences();
     if (!storedPreferences) {
@@ -568,12 +754,20 @@ export function Viewer({ data }) {
       data.dimensions?.depth || 0,
     );
     const dist = maxDim * 1.5 + 20;
-    setCameraPosition([center[0] + dist, center[1] + dist / 2, center[2] + dist]);
+    setCameraPosition([
+      center[0] + dist,
+      center[1] + dist / 2,
+      center[2] + dist,
+    ]);
     setMountedChunkCount(Math.min(INITIAL_CHUNK_BATCH, data.chunks.length));
     setBuiltChunkMap({});
     setBuildState({
       stage: "Loading chunks",
-      progress: data.chunks.length ? (Math.min(INITIAL_CHUNK_BATCH, data.chunks.length) / data.chunks.length) * 100 : 100,
+      progress: data.chunks.length
+        ? (Math.min(INITIAL_CHUNK_BATCH, data.chunks.length) /
+            data.chunks.length) *
+          100
+        : 100,
       visible: data.chunks.length > 0,
       instanceCount: 0,
       loadedChunks: 0,
@@ -613,8 +807,8 @@ export function Viewer({ data }) {
         current.loadedChunks < totalChunks
           ? Math.min(
               99,
-              ((mountedChunkCount / totalChunks) * 55) +
-                ((current.loadedChunks / totalChunks) * 45),
+              (mountedChunkCount / totalChunks) * 55 +
+                (current.loadedChunks / totalChunks) * 45,
             )
           : 100,
       visible: current.loadedChunks < totalChunks,
@@ -622,38 +816,42 @@ export function Viewer({ data }) {
     }));
   }, [mountedChunkCount, totalChunks]);
 
-  const handleChunkBuilt = useCallback((chunkId, instanceCount) => {
-    setBuiltChunkMap((current) => {
-      if (current[chunkId] === instanceCount) {
-        return current;
-      }
+  const handleChunkBuilt = useCallback(
+    (chunkId, instanceCount) => {
+      setBuiltChunkMap((current) => {
+        if (current[chunkId] === instanceCount) {
+          return current;
+        }
 
-      const next = { ...current, [chunkId]: instanceCount };
-      const loadedChunks = Object.keys(next).length;
-      const totalInstances = Object.values(next).reduce(
-        (sum, value) => sum + value,
-        0,
-      );
+        const next = { ...current, [chunkId]: instanceCount };
+        const loadedChunks = Object.keys(next).length;
+        const totalInstances = Object.values(next).reduce(
+          (sum, value) => sum + value,
+          0,
+        );
 
-      setBuildState((previous) => ({
-        ...previous,
-        stage: loadedChunks >= totalChunks ? "Ready" : "Building visible chunks",
-        progress: totalChunks
-          ? Math.min(
-              100,
-              ((mountedChunkCount / totalChunks) * 55) +
-                ((loadedChunks / totalChunks) * 45),
-            )
-          : 100,
-        visible: loadedChunks < totalChunks,
-        loadedChunks,
-        totalChunks,
-        instanceCount: totalInstances,
-      }));
+        setBuildState((previous) => ({
+          ...previous,
+          stage:
+            loadedChunks >= totalChunks ? "Ready" : "Building visible chunks",
+          progress: totalChunks
+            ? Math.min(
+                100,
+                (mountedChunkCount / totalChunks) * 55 +
+                  (loadedChunks / totalChunks) * 45,
+              )
+            : 100,
+          visible: loadedChunks < totalChunks,
+          loadedChunks,
+          totalChunks,
+          instanceCount: totalInstances,
+        }));
 
-      return next;
-    });
-  }, [mountedChunkCount, totalChunks]);
+        return next;
+      });
+    },
+    [mountedChunkCount, totalChunks],
+  );
 
   const handleRenderStats = useCallback((nextStats) => {
     setRenderStats((current) => {
@@ -835,9 +1033,11 @@ export function Viewer({ data }) {
         dpr={performanceMode ? 1 : [1, 2]}
         frameloop={frameLoopMode}
         gl={createRenderer}
+        onCreated={handleCanvasCreated}
         style={{ position: "relative", zIndex: 1 }}
       >
         <ambientLight intensity={ambientIntensity} />
+        <RendererResizeSync />
         <directionalLight
           position={[10, 20, 10]}
           intensity={directionalIntensity}
@@ -859,7 +1059,11 @@ export function Viewer({ data }) {
         </Suspense>
 
         <RendererStatsTracker onStats={handleRenderStats} />
-        <CameraController position={cameraPosition} />
+        <CameraController
+          position={cameraPosition}
+          target={modelCenter}
+          controlsRef={controlsRef}
+        />
         <OrbitControls
           ref={controlsRef}
           makeDefault
@@ -905,8 +1109,8 @@ export function Viewer({ data }) {
               marginBottom: "10px",
             }}
           >
-            Chunks {buildState.loadedChunks}/{buildState.totalChunks} · Instancias{" "}
-            {buildState.instanceCount.toLocaleString()}
+            Chunks {buildState.loadedChunks}/{buildState.totalChunks} ·
+            Instancias {buildState.instanceCount.toLocaleString()}
           </div>
           <div
             style={{
@@ -962,10 +1166,7 @@ export function Viewer({ data }) {
       />
 
       {showMaterials && (
-        <MaterialList
-          data={data}
-          onClose={() => setShowMaterials(false)}
-        />
+        <MaterialList data={data} onClose={() => setShowMaterials(false)} />
       )}
     </div>
   );
