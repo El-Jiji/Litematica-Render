@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 
 export function Sidebar({
+  renderBackend,
   maxLayer,
   setMaxLayer,
   layerBounds,
@@ -46,6 +47,13 @@ export function Sidebar({
     buttonBg: "rgba(255,255,255,0.05)",
     buttonHover: "rgba(63, 118, 228, 0.2)",
   };
+
+  const renderBackendLabel =
+    renderBackend === "webgpu"
+      ? "WebGPU"
+      : renderBackend === "webgl"
+        ? "WebGL"
+        : "Detecting...";
 
   return (
     <>
@@ -188,6 +196,19 @@ export function Sidebar({
               >
                 {modelDimensions.width} × {modelDimensions.height} ×{" "}
                 {modelDimensions.depth}
+              </div>
+
+              <div
+                style={{
+                  marginTop: "12px",
+                  paddingTop: "12px",
+                  borderTop: `1px solid ${colors.border} `,
+                  fontSize: "0.8rem",
+                  color: colors.textSecondary,
+                }}
+              >
+                <strong style={{ color: colors.accent }}>Renderer:</strong>{" "}
+                {renderBackendLabel}
               </div>
 
               {metadata.Name && (

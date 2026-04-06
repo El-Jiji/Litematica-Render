@@ -8,6 +8,7 @@ import React, {
   Suspense,
   useState,
   useCallback,
+  startTransition,
 } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter";
@@ -17,6 +18,31 @@ import { MaterialList } from "./MaterialList";
 import { Sidebar } from "./Sidebar";
 import bgImage from "../assets/bg.png";
 import { resourceManager } from "../utils/engine/ResourceManager";
+
+async function createBestAvailableRenderer(defaultProps, setRenderBackend) {
+  const rendererOptions = {
+    ...defaultProps,
+    antialias: true,
+    alpha: true,
+    preserveDrawingBuffer: true,
+  };
+
+  if (typeof navigator !== "undefined" && "gpu" in navigator) {
+    try {
+      const { WebGPURenderer } = await import("three/webgpu");
+      const renderer = new WebGPURenderer(rendererOptions);
+      await renderer.init();
+      startTransition(() => setRenderBackend("webgpu"));
+      return renderer;
+    } catch (error) {
+      console.warn("[Viewer] WebGPU unavailable, using WebGL fallback.", error);
+    }
+  }
+
+  const renderer = new THREE.WebGLRenderer(rendererOptions);
+  startTransition(() => setRenderBackend("webgl"));
+  return renderer;
+}
 
 class TextureErrorBoundary extends React.Component {
   constructor(props) {
@@ -38,6 +64,7 @@ class TextureErrorBoundary extends React.Component {
 
 function BatchedBlocks({ sceneGroups, maxLayer, xrayMode }) {
   const meshRef = useRef();
+  const populatedSignatureRef = useRef(null);
   const [batchedConfig, setBatchedConfig] = useState(null);
   const [sharedMaterial, setSharedMaterial] = useState(null);
 
@@ -63,6 +90,14 @@ function BatchedBlocks({ sceneGroups, maxLayer, xrayMode }) {
     }
     return m;
   }, [sharedMaterial, xrayMode]);
+
+  useEffect(() => {
+    return () => {
+      if (renderMaterial !== sharedMaterial) {
+        renderMaterial?.dispose?.();
+      }
+    };
+  }, [renderMaterial, sharedMaterial]);
 
   // Process groups into batched data
   useEffect(() => {
@@ -135,13 +170,25 @@ function BatchedBlocks({ sceneGroups, maxLayer, xrayMode }) {
     processGroups();
   }, [sceneGroups]);
 
+  const batchedSignature = useMemo(() => {
+    if (!batchedConfig) return null;
+
+    return [
+      batchedConfig.maxInstances,
+      batchedConfig.maxVertices,
+      batchedConfig.maxIndices,
+      ...batchedConfig.uniqueGeometries.map(({ geometry }) => geometry.uuid),
+    ].join("|");
+  }, [batchedConfig]);
+
   // Populate BatchedMesh
   useLayoutEffect(() => {
-    if (!batchedConfig || !meshRef.current) return;
+    if (!batchedConfig || !meshRef.current || !batchedSignature) return;
     const mesh = meshRef.current;
-    
-    // Clear geometries and instances is not directly possible in current BatchedMesh API 
-    // without re-creating. We use the key on the component to re-create when config changes.
+
+    if (populatedSignatureRef.current === batchedSignature) {
+      return;
+    }
 
     const geoToId = new Map();
     batchedConfig.uniqueGeometries.forEach(item => {
@@ -178,7 +225,9 @@ function BatchedBlocks({ sceneGroups, maxLayer, xrayMode }) {
       // Initial visibility
       mesh.setVisibleAt(instanceId, inst.y <= maxLayer);
     });
-  }, [batchedConfig]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    populatedSignatureRef.current = batchedSignature;
+  }, [batchedConfig, batchedSignature, maxLayer]);
 
   // Update visibility on maxLayer change
   useEffect(() => {
@@ -274,6 +323,20 @@ export function Viewer({ data }) {
 
   // Session 4: X-Ray and UX
   const [xrayMode, setXrayMode] = useState(false);
+  const [renderBackend, setRenderBackend] = useState("detecting");
+  const frameLoopMode = autoRotate || isAnimating ? "always" : "demand";
+
+  const handleRendererDetected = useCallback((backend) => {
+    startTransition(() => {
+      setRenderBackend((current) => (current === backend ? current : backend));
+    });
+  }, []);
+
+  const createRenderer = useCallback(
+    (defaultProps) =>
+      createBestAvailableRenderer(defaultProps, handleRendererDetected),
+    [handleRendererDetected],
+  );
 
   // Calculate Initial Bounds and Center
   useEffect(() => {
@@ -590,7 +653,8 @@ export function Viewer({ data }) {
 
       <Canvas
         camera={{ position: cameraPosition, fov: 50, near: 0.01, far: 10000 }}
-        gl={{ preserveDrawingBuffer: true, alpha: true }}
+        frameloop={frameLoopMode}
+        gl={createRenderer}
         style={{ position: "relative", zIndex: 1 }}
       >
         <ambientLight intensity={ambientIntensity} />
@@ -625,6 +689,7 @@ export function Viewer({ data }) {
       </Canvas>
 
       <Sidebar
+        renderBackend={renderBackend}
         maxLayer={maxLayer}
         setMaxLayer={setMaxLayer}
         layerBounds={layerBounds}
