@@ -55,7 +55,7 @@ class AssetLoader {
   }
 
   getAtlasUV(texturePath) {
-    if (!this.atlasUVs) return null;
+    if (!this.atlasUVs || typeof texturePath !== 'string') return null;
     const path = texturePath.startsWith('minecraft:') ? texturePath.split(':')[1] : texturePath;
     // misode summary prefix is "block/" or "item/"
     const key = path.startsWith('block/') || path.startsWith('item/') ? path : `block/${path}`;
@@ -128,14 +128,27 @@ class AssetLoader {
   resolveTexture(textureRef, textures) {
     if (!textureRef) return null;
     let current = textureRef;
+
+    if (typeof current === 'object') {
+      current = current.id || current.texture || current.path || null;
+    }
+
+    if (typeof current !== 'string') {
+      return null;
+    }
+
     let depth = 0;
-    while (current.startsWith('#') && depth < 10) {
+    while (typeof current === 'string' && current.startsWith('#') && depth < 10) {
       const key = current.slice(1);
       current = textures?.[key];
+      if (typeof current === 'object') {
+        current = current?.id || current?.texture || current?.path || null;
+      }
       if (!current) return null;
       depth++;
     }
-    return current;
+
+    return typeof current === 'string' ? current : null;
   }
 }
 

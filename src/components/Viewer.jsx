@@ -93,6 +93,7 @@ class TextureErrorBoundary extends React.Component {
 function BatchedBlocks({ sceneGroups, maxLayer, xrayMode, onBuildStateChange }) {
   const meshRef = useRef();
   const populatedSignatureRef = useRef(null);
+  const invalidate = useThree((state) => state.invalidate);
   const [batchedConfig, setBatchedConfig] = useState(null);
   const [sharedMaterial, setSharedMaterial] = useState(null);
 
@@ -126,6 +127,14 @@ function BatchedBlocks({ sceneGroups, maxLayer, xrayMode, onBuildStateChange }) 
       }
     };
   }, [renderMaterial, sharedMaterial]);
+
+  useEffect(() => {
+    if (!meshRef.current || !renderMaterial) return;
+
+    meshRef.current.material = renderMaterial;
+    meshRef.current.needsUpdate = true;
+    invalidate();
+  }, [invalidate, renderMaterial]);
 
   // Process groups into batched data
   useEffect(() => {
@@ -312,6 +321,7 @@ function BatchedBlocks({ sceneGroups, maxLayer, xrayMode, onBuildStateChange }) 
         batchedConfig.maxIndices,
         renderMaterial
       ]}
+      material={renderMaterial}
       frustumCulled={false}
       castShadow
       receiveShadow
