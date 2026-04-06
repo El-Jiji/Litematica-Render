@@ -3,6 +3,7 @@
 import React, {
   useMemo,
   useEffect,
+  useLayoutEffect,
   useRef,
   Suspense,
   useState,
@@ -35,18 +36,21 @@ class TextureErrorBoundary extends React.Component {
   }
 }
 
-function V2BlockInstancedMesh({
-  geometry,
-  material,
-  positions,
-  maxLayer,
-  xrayMode,
-}) {
+function BatchedBlocks({ sceneGroups, maxLayer, xrayMode }) {
   const meshRef = useRef();
+  const [batchedConfig, setBatchedConfig] = useState(null);
+  const [sharedMaterial, setSharedMaterial] = useState(null);
+
+  // Initialize shared material once
+  useEffect(() => {
+    resourceManager.getSharedMaterial().then(setSharedMaterial);
+  }, []);
+
   const renderMaterial = useMemo(() => {
-    if (!material) return material;
-    if (!xrayMode) return material;
-    const m = material.clone();
+    if (!sharedMaterial) return null;
+    if (!xrayMode) return sharedMaterial;
+    
+    const m = sharedMaterial.clone();
     m.transparent = true;
     m.opacity = 0.18;
     m.depthWrite = false;
@@ -58,63 +62,16 @@ function V2BlockInstancedMesh({
       m.emissiveIntensity = 0.25;
     }
     return m;
-  }, [material, xrayMode]);
+  }, [sharedMaterial, xrayMode]);
 
-  useEffect(() => {
-    if (!meshRef.current) return;
-
-    const tempObject = new THREE.Object3D();
-    const tempMatrix = new THREE.Matrix4();
-    const rotationMatrix = new THREE.Matrix4();
-
-    positions.forEach((pos, i) => {
-      const isVisible = pos.y <= maxLayer;
-      const scale = isVisible ? 1 : 0;
-
-      tempObject.position.set(pos.x + 0.5, pos.y + 0.5, pos.z + 0.5);
-      tempObject.scale.set(scale, scale, scale);
-      tempObject.updateMatrix();
-
-      // Apply variant-specific rotation (from blockstate variants)
-      if (pos.vRotation) {
-        rotationMatrix.makeRotationFromEuler(
-          new THREE.Euler(
-            (-pos.vRotation.x * Math.PI) / 180,
-            (-pos.vRotation.y * Math.PI) / 180,
-            0,
-            "XYZ", // Minecraft rotation order
-          ),
-        );
-        tempMatrix.multiplyMatrices(tempObject.matrix, rotationMatrix);
-        meshRef.current.setMatrixAt(i, tempMatrix);
-      } else {
-        meshRef.current.setMatrixAt(i, tempObject.matrix);
-      }
-    });
-
-    meshRef.current.instanceMatrix.needsUpdate = true;
-  }, [positions, maxLayer, geometry]);
-
-  return (
-    <instancedMesh
-      ref={meshRef}
-      args={[geometry, renderMaterial, positions.length]}
-      frustumCulled={false}
-    />
-  );
-}
-
-function SceneContent({ sceneGroups, maxLayer, xrayMode }) {
-  const [v2Groups, setV2Groups] = useState([]);
-
+  // Process groups into batched data
   useEffect(() => {
     const processGroups = async () => {
-      const groups = new Map();
       const names = Object.keys(sceneGroups);
+      if (names.length === 0) return;
 
-      // Pre-process unique states to avoid heavy await in the inner loop
+      const stateMap = new Map();
       const statePromises = [];
-      const stateMap = new Map(); // key -> { name, props, data }
 
       for (const name of names) {
         const blocks = sceneGroups[name];
@@ -125,12 +82,9 @@ function SceneContent({ sceneGroups, maxLayer, xrayMode }) {
             stateMap.set(key, { name, props: block.props || {} });
             statePromises.push(
               (async () => {
-                const data = await resourceManager.getBlockData(
-                  name,
-                  block.props || {},
-                );
+                const data = await resourceManager.getBlockData(name, block.props || {});
                 if (data) stateMap.get(key).data = data;
-              })(),
+              })()
             );
           }
         }
@@ -138,51 +92,135 @@ function SceneContent({ sceneGroups, maxLayer, xrayMode }) {
 
       await Promise.all(statePromises);
 
-      // Now build the groups
+      const uniqueGeosMap = new Map(); // geoUuid -> { geometry, id }
+      const allInstances = [];
+      let totalVertices = 0;
+      let totalIndices = 0;
+
       for (const name of names) {
         for (const block of sceneGroups[name]) {
           const propKey = JSON.stringify(block.props || {});
           const key = `${name}|${propKey}`;
           const stateInfo = stateMap.get(key);
-          if (!stateInfo || !stateInfo.data) continue;
+          if (!stateInfo || !stateInfo.data || !stateInfo.data.geometry) continue;
 
           const data = stateInfo.data;
-          if (!data.geometry) continue;
-          const geoKey = data.geometry.uuid;
-
-          if (!groups.has(geoKey)) {
-            groups.set(geoKey, {
-              geometry: data.geometry,
-              material: data.material,
-              positions: [],
-            });
+          const geo = data.geometry;
+          
+          if (!uniqueGeosMap.has(geo.uuid)) {
+            uniqueGeosMap.set(geo.uuid, { geometry: geo });
+            totalVertices += geo.attributes.position.count;
+            totalIndices += geo.index ? geo.index.count : geo.attributes.position.count;
           }
-          groups.get(geoKey).positions.push({
-            ...block,
-            vRotation: data.rotation,
+
+          allInstances.push({
+            geoUuid: geo.uuid,
+            x: block.x,
+            y: block.y,
+            z: block.z,
+            vRotation: data.rotation
           });
         }
       }
-      setV2Groups(Array.from(groups.values()));
+
+      setBatchedConfig({
+        maxInstances: allInstances.length,
+        maxVertices: totalVertices,
+        maxIndices: totalIndices,
+        uniqueGeometries: Array.from(uniqueGeosMap.values()),
+        allInstances
+      });
     };
+
     processGroups();
   }, [sceneGroups]);
 
+  // Populate BatchedMesh
+  useLayoutEffect(() => {
+    if (!batchedConfig || !meshRef.current) return;
+    const mesh = meshRef.current;
+    
+    // Clear geometries and instances is not directly possible in current BatchedMesh API 
+    // without re-creating. We use the key on the component to re-create when config changes.
+
+    const geoToId = new Map();
+    batchedConfig.uniqueGeometries.forEach(item => {
+      const id = mesh.addGeometry(item.geometry);
+      geoToId.set(item.geometry.uuid, id);
+    });
+
+    const tempObject = new THREE.Object3D();
+    const rotationMatrix = new THREE.Matrix4();
+    const tempMatrix = new THREE.Matrix4();
+
+    batchedConfig.allInstances.forEach((inst, i) => {
+      const geoId = geoToId.get(inst.geoUuid);
+      const instanceId = mesh.addInstance(geoId);
+      
+      tempObject.position.set(inst.x + 0.5, inst.y + 0.5, inst.z + 0.5);
+      tempObject.updateMatrix();
+
+      if (inst.vRotation) {
+        rotationMatrix.makeRotationFromEuler(
+          new THREE.Euler(
+            (-inst.vRotation.x * Math.PI) / 180,
+            (-inst.vRotation.y * Math.PI) / 180,
+            0,
+            "XYZ"
+          )
+        );
+        tempMatrix.multiplyMatrices(tempObject.matrix, rotationMatrix);
+        mesh.setMatrixAt(instanceId, tempMatrix);
+      } else {
+        mesh.setMatrixAt(instanceId, tempObject.matrix);
+      }
+      
+      // Initial visibility
+      mesh.setVisibleAt(instanceId, inst.y <= maxLayer);
+    });
+  }, [batchedConfig]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Update visibility on maxLayer change
+  useEffect(() => {
+    if (!meshRef.current || !batchedConfig) return;
+    const mesh = meshRef.current;
+    
+    batchedConfig.allInstances.forEach((inst, i) => {
+      // Instance ID corresponds to index in allInstances because of how we added them
+      mesh.setVisibleAt(i, inst.y <= maxLayer);
+    });
+  }, [maxLayer, batchedConfig]);
+
+  if (!batchedConfig || !renderMaterial) return null;
+
   return (
-    <group>
-      {v2Groups.map((group, idx) => (
-        <V2BlockInstancedMesh
-          key={idx}
-          geometry={group.geometry}
-          material={group.material}
-          positions={group.positions}
-          maxLayer={maxLayer}
-          xrayMode={xrayMode}
-        />
-      ))}
-    </group>
+    <batchedMesh
+      key={`${batchedConfig.maxInstances}-${batchedConfig.uniqueGeometries.length}`}
+      ref={meshRef}
+      args={[
+        batchedConfig.maxInstances,
+        batchedConfig.maxVertices,
+        batchedConfig.maxIndices,
+        renderMaterial
+      ]}
+      frustumCulled={false}
+      castShadow
+      receiveShadow
+    />
   );
 }
+
+function SceneContent({ sceneGroups, maxLayer, xrayMode }) {
+  // Simple wrapper to use the new BatchedBlocks
+  return (
+    <BatchedBlocks 
+      sceneGroups={sceneGroups} 
+      maxLayer={maxLayer} 
+      xrayMode={xrayMode} 
+    />
+  );
+}
+
 // Camera controller component to handle camera position updates
 function CameraController({ position }) {
   const { camera } = useThree();
