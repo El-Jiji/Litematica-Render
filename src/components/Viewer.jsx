@@ -599,71 +599,35 @@ function CircularGridFloor({ bounds, dimensions }) {
     dimensions?.width,
   ]);
 
-  const gridTexture = useMemo(() => {
+  const gridHelper = useMemo(() => {
     if (floorSize <= 0) {
       return null;
     }
 
-    const size = 1024;
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const context = canvas.getContext("2d");
-
-    if (!context) {
-      return null;
-    }
-
-    context.clearRect(0, 0, size, size);
-    context.strokeStyle = "rgba(255,255,255,0.5)";
-    context.lineWidth = 1;
-
-    const gridCells = floorSize;
-    const spacing = size / gridCells;
-
-    for (let index = 0; index <= gridCells; index += 1) {
-      const offset = Math.round(index * spacing) + 0.5;
-
-      context.beginPath();
-      context.moveTo(offset, 0);
-      context.lineTo(offset, size);
-      context.stroke();
-
-      context.beginPath();
-      context.moveTo(0, offset);
-      context.lineTo(size, offset);
-      context.stroke();
-    }
-
-    const fadeGradient = context.createRadialGradient(
-      size / 2,
-      size / 2,
-      size * 0.2,
-      size / 2,
-      size / 2,
-      size * 0.5,
+    const helper = new THREE.GridHelper(
+      floorSize,
+      floorSize,
+      "#8fb7ff",
+      "#d6e4ff",
     );
-    fadeGradient.addColorStop(0, "rgba(255,255,255,1)");
-    fadeGradient.addColorStop(0.72, "rgba(255,255,255,1)");
-    fadeGradient.addColorStop(0.92, "rgba(255,255,255,0.35)");
-    fadeGradient.addColorStop(1, "rgba(255,255,255,0)");
 
-    context.globalCompositeOperation = "destination-in";
-    context.fillStyle = fadeGradient;
-    context.beginPath();
-    context.arc(size / 2, size / 2, size * 0.5, 0, Math.PI * 2);
-    context.fill();
+    helper.material.transparent = true;
+    helper.material.opacity = 0.14;
+    helper.material.depthWrite = false;
+    helper.material.toneMapped = false;
+    helper.renderOrder = -1;
 
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.wrapS = THREE.ClampToEdgeWrapping;
-    texture.wrapT = THREE.ClampToEdgeWrapping;
-    texture.needsUpdate = true;
-
-    return texture;
+    return helper;
   }, [floorSize]);
 
-  useEffect(() => () => gridTexture?.dispose(), [gridTexture]);
+  useEffect(
+    () => () => {
+      if (!gridHelper) return;
+      gridHelper.geometry.dispose();
+      gridHelper.material.dispose();
+    },
+    [gridHelper],
+  );
 
   const position = useMemo(
     () => {
@@ -685,26 +649,9 @@ function CircularGridFloor({ bounds, dimensions }) {
     [bounds.maxX, bounds.maxZ, bounds.minX, bounds.minY, bounds.minZ, floorSize],
   );
 
-  if (!gridTexture || floorSize <= 0) return null;
+  if (!gridHelper || floorSize <= 0) return null;
 
-  return (
-    <mesh
-      position={position}
-      rotation={[-Math.PI / 2, 0, 0]}
-      renderOrder={-1}
-    >
-      <planeGeometry args={[floorSize, floorSize, 1, 1]} />
-      <meshBasicMaterial
-        map={gridTexture}
-        color="#ffffff"
-        transparent
-        opacity={0.32}
-        depthWrite={false}
-        toneMapped={false}
-        side={THREE.DoubleSide}
-      />
-    </mesh>
-  );
+  return <primitive object={gridHelper} position={position} />;
 }
 
 export function Viewer({ data }) {
