@@ -15,7 +15,6 @@ import { OrbitControls, Environment } from "@react-three/drei";
 import * as THREE from "three";
 import { MaterialList } from "./MaterialList";
 import { Sidebar } from "./Sidebar";
-import bgImage from "../assets/bg.png";
 import { resourceManager } from "../utils/engine/ResourceManager";
 
 const VIEWER_PREFERENCES_KEY = "litematica-viewer-preferences";
@@ -571,6 +570,143 @@ function CameraController({ position, target, controlsRef }) {
   return null;
 }
 
+function SceneBackground({ color = "#2f2f32" }) {
+  const { scene } = useThree();
+
+  useEffect(() => {
+    const previousBackground = scene.background;
+    scene.background = new THREE.Color(color);
+
+    return () => {
+      scene.background = previousBackground;
+    };
+  }, [color, scene]);
+
+  return null;
+}
+
+function CircularGridFloor({ bounds, dimensions }) {
+  const floorSize = useMemo(() => {
+    const width = dimensions?.width || bounds.maxX - bounds.minX + 1 || 0;
+    const depth = dimensions?.depth || bounds.maxZ - bounds.minZ + 1 || 0;
+    return Math.max(24, Math.ceil(Math.max(width, depth) * 1.8));
+  }, [
+    bounds.maxX,
+    bounds.maxZ,
+    bounds.minX,
+    bounds.minZ,
+    dimensions?.depth,
+    dimensions?.width,
+  ]);
+
+  const gridTexture = useMemo(() => {
+    if (floorSize <= 0) {
+      return null;
+    }
+
+    const size = 1024;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      return null;
+    }
+
+    context.clearRect(0, 0, size, size);
+    context.strokeStyle = "rgba(255,255,255,0.5)";
+    context.lineWidth = 1;
+
+    const gridCells = floorSize;
+    const spacing = size / gridCells;
+
+    for (let index = 0; index <= gridCells; index += 1) {
+      const offset = Math.round(index * spacing) + 0.5;
+
+      context.beginPath();
+      context.moveTo(offset, 0);
+      context.lineTo(offset, size);
+      context.stroke();
+
+      context.beginPath();
+      context.moveTo(0, offset);
+      context.lineTo(size, offset);
+      context.stroke();
+    }
+
+    const fadeGradient = context.createRadialGradient(
+      size / 2,
+      size / 2,
+      size * 0.2,
+      size / 2,
+      size / 2,
+      size * 0.5,
+    );
+    fadeGradient.addColorStop(0, "rgba(255,255,255,1)");
+    fadeGradient.addColorStop(0.72, "rgba(255,255,255,1)");
+    fadeGradient.addColorStop(0.92, "rgba(255,255,255,0.35)");
+    fadeGradient.addColorStop(1, "rgba(255,255,255,0)");
+
+    context.globalCompositeOperation = "destination-in";
+    context.fillStyle = fadeGradient;
+    context.beginPath();
+    context.arc(size / 2, size / 2, size * 0.5, 0, Math.PI * 2);
+    context.fill();
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.needsUpdate = true;
+
+    return texture;
+  }, [floorSize]);
+
+  useEffect(() => () => gridTexture?.dispose(), [gridTexture]);
+
+  const position = useMemo(
+    () => {
+      const modelSpanX = bounds.maxX - bounds.minX + 1;
+      const modelSpanZ = bounds.maxZ - bounds.minZ + 1;
+      const floorMinX = Math.floor(
+        bounds.minX - (floorSize - modelSpanX) / 2,
+      );
+      const floorMinZ = Math.floor(
+        bounds.minZ - (floorSize - modelSpanZ) / 2,
+      );
+
+      return [
+        floorMinX + floorSize / 2,
+        bounds.minY - 0.02,
+        floorMinZ + floorSize / 2,
+      ];
+    },
+    [bounds.maxX, bounds.maxZ, bounds.minX, bounds.minY, bounds.minZ, floorSize],
+  );
+
+  if (!gridTexture || floorSize <= 0) return null;
+
+  return (
+    <mesh
+      position={position}
+      rotation={[-Math.PI / 2, 0, 0]}
+      renderOrder={-1}
+    >
+      <planeGeometry args={[floorSize, floorSize, 1, 1]} />
+      <meshBasicMaterial
+        map={gridTexture}
+        color="#ffffff"
+        transparent
+        opacity={0.32}
+        depthWrite={false}
+        toneMapped={false}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
+  );
+}
+
 export function Viewer({ data }) {
   const [maxLayer, setMaxLayer] = useState(256);
   const [layerBounds, setLayerBounds] = useState({ min: 0, max: 256 });
@@ -753,7 +889,7 @@ export function Viewer({ data }) {
       data.dimensions?.height || 0,
       data.dimensions?.depth || 0,
     );
-    const dist = maxDim * 1.5 + 20;
+    const dist = Math.max(18, maxDim * 1.15 + 10);
     setCameraPosition([
       center[0] + dist,
       center[1] + dist / 2,
@@ -1008,26 +1144,11 @@ export function Viewer({ data }) {
       style={{
         width: "100vw",
         height: "100vh",
-        background: "#000",
+        background: "#141418",
         position: "relative",
         overflow: "hidden",
       }}
     >
-      <div
-        style={{
-          position: "absolute",
-          top: -20,
-          left: -20,
-          right: -20,
-          bottom: -20,
-          backgroundImage: `url(${bgImage.src || bgImage})`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          filter: "blur(20px) brightness(0.6)",
-          zIndex: 0,
-        }}
-      />
-
       <Canvas
         camera={{ position: cameraPosition, fov: 50, near: 0.01, far: 10000 }}
         dpr={performanceMode ? 1 : [1, 2]}
@@ -1036,6 +1157,7 @@ export function Viewer({ data }) {
         onCreated={handleCanvasCreated}
         style={{ position: "relative", zIndex: 1 }}
       >
+        <SceneBackground color="#141418" />
         <ambientLight intensity={ambientIntensity} />
         <RendererResizeSync />
         <directionalLight
@@ -1049,6 +1171,10 @@ export function Viewer({ data }) {
 
         <Suspense fallback={null}>
           <group>
+            <CircularGridFloor
+              bounds={modelBounds}
+              dimensions={modelDimensions}
+            />
             <SceneContent
               chunks={visibleChunks}
               maxLayer={maxLayer}

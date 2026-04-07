@@ -11,6 +11,10 @@ export default function RootLayout({ children }) {
   return (
     <html lang="es">
       <head>
+        <meta
+          name="google-site-verification"
+          content="jj8umSgUSyogvEwNDRRw-yJed2MT4TS7cPTfI43LntM"
+        />
         <Script
           id="block-map-loader"
           strategy="beforeInteractive"
