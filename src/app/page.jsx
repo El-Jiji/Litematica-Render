@@ -179,6 +179,7 @@ export default function Home() {
           <Viewer data={data} />
           <button
             onClick={handleReset}
+            className="reset-upload-button"
             style={{
               position: "absolute",
               top: "10px",
@@ -189,7 +190,7 @@ export default function Home() {
               border: "none",
               borderRadius: "5px",
               cursor: "pointer",
-              zIndex: 100,
+              zIndex: 90,
             }}
           >
             Subir otro archivo
@@ -197,7 +198,7 @@ export default function Home() {
         </>
       )}
 
-      <SocialLinks />
+      <SocialLinks className="floating-social-links" />
     </div>
   );
 }

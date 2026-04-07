@@ -23,10 +23,9 @@ const icons = {
   },
 };
 
-export function SocialLinks() {
-  const links = [
+export const SOCIAL_LINKS = [
     {
-      name: "GitHub Project",
+      name: "GitHub",
       url: "https://github.com/El-Jiji/Litematica-Render",
       icon: icons.github,
       color: "#333",
@@ -44,25 +43,35 @@ export function SocialLinks() {
       color: "#1bd96a",
     },
     {
-      name: "Report Issue",
+      name: "Issue",
       url: "https://github.com/El-Jiji/Litematica-Render/issues",
       icon: icons.bug,
       color: "#d9534f",
     },
   ];
 
-  return (
-    <div
-      style={{
+export function SocialLinks({ className = "", inline = false }) {
+  const containerStyle = inline
+    ? {
+        display: "grid",
+        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+        gap: "10px",
+      }
+    : {
         position: "absolute",
         bottom: "20px",
         right: "20px",
         display: "flex",
         gap: "12px",
         zIndex: 1000,
-      }}
+      };
+
+  return (
+    <div
+      className={className}
+      style={containerStyle}
     >
-      {links.map((link) => (
+      {SOCIAL_LINKS.map((link) => (
         <a
           key={link.name}
           href={link.url}
@@ -72,15 +81,20 @@ export function SocialLinks() {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            width: "42px",
-            height: "42px",
+            gap: inline ? "10px" : 0,
+            width: inline ? "100%" : "42px",
+            height: inline ? "46px" : "42px",
+            padding: inline ? "0 12px" : 0,
             backgroundColor: "rgba(30, 30, 30, 0.6)",
-            borderRadius: "50%",
+            borderRadius: inline ? "10px" : "50%",
             color: "white",
             transition: "all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)",
             border: "1px solid rgba(255,255,255,0.1)",
             backdropFilter: "blur(4px)",
             boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+            textDecoration: "none",
+            fontSize: inline ? "0.8rem" : undefined,
+            fontWeight: inline ? 600 : undefined,
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.backgroundColor = link.color;
@@ -95,7 +109,7 @@ export function SocialLinks() {
             e.currentTarget.style.border = "1px solid rgba(255,255,255,0.1)";
           }}
           title={link.name}
-        >
+          >
           <svg
             viewBox={link.icon.viewBox}
             width="22"
@@ -105,6 +119,7 @@ export function SocialLinks() {
           >
             <path d={link.icon.path} />
           </svg>
+          {inline && <span>{link.name}</span>}
         </a>
       ))}
     </div>

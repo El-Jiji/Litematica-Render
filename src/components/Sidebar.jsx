@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { SocialLinks } from "./SocialLinks";
 
 export function Sidebar({
   renderBackend,
@@ -41,14 +42,14 @@ export function Sidebar({
     position: "absolute",
     top: 0,
     left: collapsed ? "-320px" : "0",
-    width: "300px",
+    width: "min(300px, calc(100vw - 56px))",
     height: "100vh",
     padding: "18px",
     background: "rgba(20,20,20,0.88)",
     borderRight: "1px solid rgba(255,255,255,0.1)",
     color: "white",
     transition: "left 0.3s ease",
-    zIndex: 100,
+    zIndex: 220,
     display: "flex",
     flexDirection: "column",
     gap: "16px",
@@ -87,7 +88,7 @@ export function Sidebar({
             position: "absolute",
             top: "16px",
             left: "16px",
-            zIndex: 110,
+            zIndex: 230,
             padding: "10px 14px",
             borderRadius: "8px",
             border: "1px solid rgba(255,255,255,0.12)",
@@ -101,11 +102,36 @@ export function Sidebar({
       )}
 
       <div style={panel}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            position: "sticky",
+            top: "-18px",
+            paddingTop: "18px",
+            paddingBottom: "8px",
+            background: "rgba(20,20,20,0.96)",
+            zIndex: 1,
+          }}
+        >
           <strong>Litematica Viewer</strong>
           <button
             onClick={() => setCollapsed(true)}
-            style={{ background: "transparent", border: "none", color: "#aaa", cursor: "pointer" }}
+            aria-label="Cerrar menu"
+            style={{
+              background: "rgba(255,255,255,0.08)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              color: "#fff",
+              cursor: "pointer",
+              width: "36px",
+              height: "36px",
+              minWidth: "36px",
+              display: "grid",
+              placeItems: "center",
+              lineHeight: 1,
+              padding: 0,
+            }}
           >
             x
           </button>
@@ -312,6 +338,13 @@ export function Sidebar({
             onChange={(event) => setAnimationSpeed(Number(event.target.value))}
             style={{ width: "100%", accentColor: "#3f76e4" }}
           />
+        </div>
+
+        <div className="sidebar-mobile-links" style={cardStyle}>
+          <div style={{ fontSize: "0.78rem", color: "#8eaef3", marginBottom: "8px" }}>
+            LINKS
+          </div>
+          <SocialLinks inline />
         </div>
       </div>
     </>
