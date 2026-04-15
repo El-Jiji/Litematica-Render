@@ -1,132 +1,40 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React from "react";
+import styles from "./MaterialList.module.css";
 
 export function MaterialList({ data, onClose }) {
-  const materials = useMemo(() => {
-    if (!data) return [];
-    if (Array.isArray(data.materials)) return data.materials;
-    if (!data.regions) return [];
-
-    const counts = {};
-
-    Object.values(data.regions).forEach((region) => {
-      region.blocks.forEach((block) => {
-        const name = block.name.replace("minecraft:", "").replace(/_/g, " ");
-        const displayName = name.replace(/\b\w/g, (char) => char.toUpperCase());
-        counts[displayName] = (counts[displayName] || 0) + 1;
-      });
-    });
-
-    return Object.entries(counts)
-      .sort(([, a], [, b]) => b - a)
-      .map(([name, count]) => ({ name, count }));
-  }, [data]);
+  const materials = Array.isArray(data?.materials) ? data.materials : [];
+  const totalBlocks = materials.reduce((sum, material) => sum + material.count, 0);
 
   return (
-    <div
-      style={{
-        position: "absolute",
-        top: "10px",
-        right: "10px",
-        width: "300px",
-        maxHeight: "80vh",
-        backgroundColor: "rgba(20, 20, 20, 0.9)",
-        backdropFilter: "blur(5px)",
-        borderRadius: "10px",
-        boxShadow: "0 4px 6px rgba(0,0,0,0.3)",
-        color: "#fff",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        fontFamily: "'Inter', sans-serif",
-        border: "1px solid rgba(255,255,255,0.1)",
-        zIndex: 1000,
-      }}
-    >
-      <div
-        style={{
-          padding: "15px",
-          borderBottom: "1px solid rgba(255,255,255,0.1)",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          backgroundColor: "rgba(255,255,255,0.05)",
-        }}
-      >
-        <h2 style={{ margin: 0, fontSize: "1.2rem", fontWeight: "600" }}>
-          Material List
-        </h2>
-        <button
-          onClick={onClose}
-          style={{
-            background: "transparent",
-            border: "none",
-            color: "#aaa",
-            cursor: "pointer",
-            fontSize: "1.2rem",
-            padding: "0 5px",
-          }}
-        >
+    <div className={styles.overlay}>
+      <div className={styles.header}>
+        <h2 className={styles.title}>Lista de materiales</h2>
+        <button onClick={onClose} className={styles.closeButton}>
           x
         </button>
       </div>
 
-      <div style={{ overflowY: "auto", flex: 1, padding: 0 }}>
+      <div className={styles.content}>
         {materials.length === 0 ? (
-          <div style={{ padding: "20px", textAlign: "center", opacity: 0.7 }}>
-            No blocks found
-          </div>
+          <div className={styles.empty}>No se encontraron bloques</div>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <table className={styles.table}>
             <thead>
-              <tr
-                style={{
-                  textAlign: "left",
-                  fontSize: "0.8rem",
-                  color: "#888",
-                  borderBottom: "1px solid rgba(255,255,255,0.05)",
-                }}
-              >
-                <th style={{ padding: "10px 15px", fontWeight: "normal" }}>
-                  Block Name
-                </th>
-                <th
-                  style={{
-                    padding: "10px 15px",
-                    textAlign: "right",
-                    fontWeight: "normal",
-                  }}
-                >
-                  Count
-                </th>
+              <tr className={styles.headRow}>
+                <th className={styles.headCell}>Bloque</th>
+                <th className={styles.headCellRight}>Cantidad</th>
               </tr>
             </thead>
             <tbody>
               {materials.map((item, index) => (
                 <tr
                   key={item.name}
-                  style={{
-                    backgroundColor:
-                      index % 2 === 0
-                        ? "transparent"
-                        : "rgba(255,255,255,0.02)",
-                    borderBottom: "1px solid rgba(255,255,255,0.02)",
-                  }}
+                  className={`${styles.row} ${index % 2 === 0 ? "" : styles.rowAlt}`}
                 >
-                  <td style={{ padding: "8px 15px", fontSize: "0.9rem" }}>
-                    {item.name}
-                  </td>
-                  <td
-                    style={{
-                      padding: "8px 15px",
-                      textAlign: "right",
-                      fontFamily: "monospace",
-                      fontSize: "1rem",
-                    }}
-                  >
-                    {item.count.toLocaleString()}
-                  </td>
+                  <td className={styles.nameCell}>{item.name}</td>
+                  <td className={styles.countCell}>{item.count.toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>
@@ -134,18 +42,7 @@ export function MaterialList({ data, onClose }) {
         )}
       </div>
 
-      <div
-        style={{
-          padding: "10px 15px",
-          fontSize: "0.8rem",
-          color: "#666",
-          borderTop: "1px solid rgba(255,255,255,0.1)",
-          textAlign: "center",
-        }}
-      >
-        Total Blocks:{" "}
-        {materials.reduce((sum, material) => sum + material.count, 0).toLocaleString()}
-      </div>
+      <div className={styles.footer}>Total de bloques: {totalBlocks.toLocaleString()}</div>
     </div>
   );
 }

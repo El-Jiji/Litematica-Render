@@ -22,6 +22,12 @@ const LARGE_BUILD_THRESHOLD = 25000;
 const INITIAL_CHUNK_BATCH = 8;
 const PROGRESSIVE_CHUNK_BATCH = 6;
 const CHUNK_BATCH_INTERVAL_MS = 120;
+const DEFAULT_RARE_BLOCK_THRESHOLD = 64;
+const SLICE_LABELS = {
+  x: "X",
+  y: "Y",
+  z: "Z",
+};
 
 function syncRendererDrawingBuffer(
   renderer,
@@ -84,32 +90,6 @@ async function createBestAvailableRenderer(defaultProps, setRenderBackend) {
     window.innerHeight;
   const initialPixelRatio = window.devicePixelRatio || 1;
 
-  if (typeof navigator !== "undefined" && "gpu" in navigator) {
-    try {
-      const { WebGPURenderer } = await import("three/webgpu");
-      const renderer = new WebGPURenderer(rendererOptions);
-      syncRendererDrawingBuffer(
-        renderer,
-        canvas,
-        initialWidth,
-        initialHeight,
-        initialPixelRatio,
-      );
-      await renderer.init();
-      syncRendererDrawingBuffer(
-        renderer,
-        canvas,
-        initialWidth,
-        initialHeight,
-        initialPixelRatio,
-      );
-      startTransition(() => setRenderBackend("webgpu"));
-      return renderer;
-    } catch (error) {
-      console.warn("[Viewer] WebGPU unavailable, using WebGL fallback.", error);
-    }
-  }
-
   const renderer = new THREE.WebGLRenderer(rendererOptions);
   syncRendererDrawingBuffer(
     renderer,
@@ -147,14 +127,130 @@ function saveViewerPreferences(preferences) {
   }
 }
 
-function ChunkMesh({ chunk, maxLayer, modelCenter, onChunkBuilt }) {
-  const groupRef = useRef(null);
+function getSliceBounds(bounds, axis) {
+  if (axis === "x") {
+    return { min: bounds.minX, max: bounds.maxX };
+  }
+  if (axis === "z") {
+    return { min: bounds.minZ, max: bounds.maxZ };
+  }
+
+  return { min: bounds.minY, max: bounds.maxY };
+}
+
+function isWithinSlice(block, axis, limit) {
+  if (axis === "x") return block.x <= limit;
+  if (axis === "z") return block.z <= limit;
+  return block.y <= limit;
+}
+
+function BatchedInstancesMesh({
+  batchedConfig,
+  material,
+  scaleScalar = 1,
+  renderOrder = 0,
+  castShadow = true,
+  receiveShadow = true,
+  onBuilt,
+}) {
   const meshRef = useRef(null);
   const populatedSignatureRef = useRef(null);
   const invalidate = useThree((state) => state.invalidate);
+
+  const batchedSignature = useMemo(() => {
+    if (!batchedConfig || !material) return null;
+
+    return [
+      material.uuid,
+      batchedConfig.maxInstances,
+      batchedConfig.maxVertices,
+      batchedConfig.maxIndices,
+      scaleScalar,
+      ...batchedConfig.uniqueGeometries.map((geometry) => geometry.uuid),
+    ].join("|");
+  }, [batchedConfig, material, scaleScalar]);
+
+  useLayoutEffect(() => {
+    if (!batchedConfig || !material || !meshRef.current || !batchedSignature) {
+      return;
+    }
+
+    const mesh = meshRef.current;
+    if (populatedSignatureRef.current === batchedSignature) {
+      return;
+    }
+
+    const geoToId = new Map();
+    batchedConfig.uniqueGeometries.forEach((geometry) => {
+      const id = mesh.addGeometry(geometry);
+      geoToId.set(geometry.uuid, id);
+    });
+
+    const tempObject = new THREE.Object3D();
+    batchedConfig.allInstances.forEach((instance) => {
+      const geoId = geoToId.get(instance.geoUuid);
+      const instanceId = mesh.addInstance(geoId);
+
+      tempObject.position.set(
+        instance.x + 0.5,
+        instance.y + 0.5,
+        instance.z + 0.5,
+      );
+      tempObject.scale.setScalar(scaleScalar);
+      tempObject.updateMatrix();
+      mesh.setMatrixAt(instanceId, tempObject.matrix);
+      mesh.setVisibleAt(instanceId, true);
+    });
+
+    populatedSignatureRef.current = batchedSignature;
+    onBuilt?.(batchedConfig.allInstances.length);
+    invalidate();
+  }, [batchedConfig, batchedSignature, invalidate, material, onBuilt, scaleScalar]);
+
+  useEffect(() => {
+    if (!meshRef.current || !batchedConfig) return;
+
+    batchedConfig.allInstances.forEach((instance, index) => {
+      meshRef.current.setVisibleAt(index, true);
+    });
+
+    invalidate();
+  }, [batchedConfig, invalidate]);
+
+  if (!batchedConfig || !material || batchedConfig.maxInstances === 0) {
+    return null;
+  }
+
+  return (
+    <batchedMesh
+      key={batchedSignature}
+      ref={meshRef}
+      args={[
+        batchedConfig.maxInstances,
+        batchedConfig.maxVertices,
+        batchedConfig.maxIndices,
+        material,
+      ]}
+      material={material}
+      frustumCulled={false}
+      castShadow={castShadow}
+      receiveShadow={receiveShadow}
+      renderOrder={renderOrder}
+    />
+  );
+}
+
+function ChunkMesh({
+  chunk,
+  sliceAxis,
+  sliceLimit,
+  modelCenter,
+  onChunkBuilt,
+}) {
+  const groupRef = useRef(null);
+  const invalidate = useThree((state) => state.invalidate);
   const [batchedConfig, setBatchedConfig] = useState(null);
   const [sharedMaterial, setSharedMaterial] = useState(null);
-  const [isChunkVisible, setIsChunkVisible] = useState(true);
   const visibilityStateRef = useRef(true);
   const lastVisibilityCheckRef = useRef(0);
 
@@ -180,6 +276,10 @@ function ChunkMesh({ chunk, maxLayer, modelCenter, onChunkBuilt }) {
     chunkBox.getBoundingSphere(sphere);
     return sphere;
   }, [chunkBox]);
+  const modelCenterVector = useMemo(
+    () => new THREE.Vector3(...modelCenter),
+    [modelCenter],
+  );
 
   useEffect(() => {
     resourceManager.getSharedMaterial().then(setSharedMaterial);
@@ -189,76 +289,99 @@ function ChunkMesh({ chunk, maxLayer, modelCenter, onChunkBuilt }) {
     let isCancelled = false;
 
     const processChunk = async () => {
-      const stateMap = new Map();
-      const statePromises = [];
+      try {
+        const stateMap = new Map();
+        const statePromises = [];
 
-      for (const block of chunk.blocks) {
-        const propKey = JSON.stringify(block.props || {});
-        const key = `${block.name}|${propKey}|${block.visibleFaces}`;
+        for (const block of chunk.blocks) {
+          const propKey = JSON.stringify(block.props || {});
+          const key = `${block.name}|${propKey}|${block.visibleFaces}`;
 
-        if (!stateMap.has(key)) {
-          stateMap.set(key, {
-            name: block.name,
-            props: block.props || {},
-            visibleFaces: block.visibleFaces,
-          });
-          statePromises.push(
-            (async () => {
-              const data = await resourceManager.getBlockData(
-                block.name,
-                block.props || {},
-                block.visibleFaces,
-              );
-              if (data) {
-                stateMap.get(key).data = data;
-              }
-            })(),
-          );
-        }
-      }
-
-      await Promise.all(statePromises);
-      if (isCancelled) return;
-
-      const uniqueGeometries = new Map();
-      const allInstances = [];
-      let totalVertices = 0;
-      let totalIndices = 0;
-
-      for (const block of chunk.blocks) {
-        const propKey = JSON.stringify(block.props || {});
-        const key = `${block.name}|${propKey}|${block.visibleFaces}`;
-        const stateInfo = stateMap.get(key);
-
-        if (!stateInfo?.data?.geometry) continue;
-
-        const geometry = stateInfo.data.geometry;
-        if (!uniqueGeometries.has(geometry.uuid)) {
-          uniqueGeometries.set(geometry.uuid, geometry);
-          totalVertices += geometry.attributes.position.count;
-          totalIndices += geometry.index
-            ? geometry.index.count
-            : geometry.attributes.position.count;
+          if (!stateMap.has(key)) {
+            stateMap.set(key, {
+              name: block.name,
+              props: block.props || {},
+              visibleFaces: block.visibleFaces,
+            });
+            statePromises.push(
+              (async () => {
+                const data = await resourceManager.getBlockData(
+                  block.name,
+                  block.props || {},
+                  block.visibleFaces,
+                );
+                if (data) {
+                  stateMap.get(key).data = data;
+                }
+              })(),
+            );
+          }
         }
 
-        allInstances.push({
-          geoUuid: geometry.uuid,
-          x: block.x,
-          y: block.y,
-          z: block.z,
-          vRotation: stateInfo.data.rotation,
+        await Promise.all(statePromises);
+        if (isCancelled) return;
+
+        const uniqueGeometries = new Map();
+        const allInstances = [];
+        let totalVertices = 0;
+        let totalIndices = 0;
+
+        for (const block of chunk.blocks) {
+          const propKey = JSON.stringify(block.props || {});
+          const key = `${block.name}|${propKey}|${block.visibleFaces}`;
+          const stateInfo = stateMap.get(key);
+
+          if (!stateInfo?.data?.geometry) continue;
+
+          const geometry = stateInfo.data.geometry;
+          if (!uniqueGeometries.has(geometry.uuid)) {
+            uniqueGeometries.set(geometry.uuid, geometry);
+            totalVertices += geometry.attributes.position.count;
+            totalIndices += geometry.index
+              ? geometry.index.count
+              : geometry.attributes.position.count;
+          }
+
+          if (!isWithinSlice(block, sliceAxis, sliceLimit)) {
+            continue;
+          }
+
+          const instance = {
+            geoUuid: geometry.uuid,
+            x: block.x,
+            y: block.y,
+            z: block.z,
+          };
+
+          allInstances.push(instance);
+        }
+
+        if (isCancelled) return;
+
+        if (allInstances.length === 0) {
+          onChunkBuilt?.(chunk.id, 0);
+        }
+
+        setBatchedConfig({
+          maxInstances: allInstances.length,
+          maxVertices: totalVertices,
+          maxIndices: totalIndices,
+          uniqueGeometries: Array.from(uniqueGeometries.values()),
+          allInstances,
         });
+      } catch (error) {
+        console.error(`[Viewer] Failed to process chunk ${chunk.id}`, error);
+        if (!isCancelled) {
+          onChunkBuilt?.(chunk.id, 0);
+          setBatchedConfig({
+            maxInstances: 0,
+            maxVertices: 0,
+            maxIndices: 0,
+            uniqueGeometries: [],
+            allInstances: [],
+          });
+        }
       }
-
-      if (isCancelled) return;
-
-      setBatchedConfig({
-        maxInstances: allInstances.length,
-        maxVertices: totalVertices,
-        maxIndices: totalIndices,
-        uniqueGeometries: Array.from(uniqueGeometries.values()),
-        allInstances,
-      });
     };
 
     processChunk();
@@ -266,95 +389,13 @@ function ChunkMesh({ chunk, maxLayer, modelCenter, onChunkBuilt }) {
     return () => {
       isCancelled = true;
     };
-  }, [chunk.blocks]);
-
-  const batchedSignature = useMemo(() => {
-    if (!batchedConfig) return null;
-
-    return [
-      chunk.id,
-      batchedConfig.maxInstances,
-      batchedConfig.maxVertices,
-      batchedConfig.maxIndices,
-      ...batchedConfig.uniqueGeometries.map((geometry) => geometry.uuid),
-    ].join("|");
-  }, [batchedConfig, chunk.id]);
-
-  useLayoutEffect(() => {
-    if (!batchedConfig || !meshRef.current || !batchedSignature) return;
-    const mesh = meshRef.current;
-
-    if (populatedSignatureRef.current === batchedSignature) {
-      return;
-    }
-
-    const geoToId = new Map();
-    batchedConfig.uniqueGeometries.forEach((geometry) => {
-      const id = mesh.addGeometry(geometry);
-      geoToId.set(geometry.uuid, id);
-    });
-
-    const tempObject = new THREE.Object3D();
-    const rotationMatrix = new THREE.Matrix4();
-    const tempMatrix = new THREE.Matrix4();
-
-    batchedConfig.allInstances.forEach((instance) => {
-      const geoId = geoToId.get(instance.geoUuid);
-      const instanceId = mesh.addInstance(geoId);
-
-      tempObject.position.set(
-        instance.x + 0.5,
-        instance.y + 0.5,
-        instance.z + 0.5,
-      );
-      tempObject.updateMatrix();
-
-      if (instance.vRotation) {
-        rotationMatrix.makeRotationFromEuler(
-          new THREE.Euler(
-            (-instance.vRotation.x * Math.PI) / 180,
-            (-instance.vRotation.y * Math.PI) / 180,
-            0,
-            "XYZ",
-          ),
-        );
-        tempMatrix.multiplyMatrices(tempObject.matrix, rotationMatrix);
-        mesh.setMatrixAt(instanceId, tempMatrix);
-      } else {
-        mesh.setMatrixAt(instanceId, tempObject.matrix);
-      }
-
-      mesh.setVisibleAt(instanceId, instance.y <= maxLayer);
-    });
-
-    populatedSignatureRef.current = batchedSignature;
-    onChunkBuilt?.(chunk.id, batchedConfig.allInstances.length);
-    invalidate();
   }, [
-    batchedConfig,
-    batchedSignature,
+    chunk.blocks,
     chunk.id,
-    invalidate,
-    maxLayer,
     onChunkBuilt,
+    sliceAxis,
+    sliceLimit,
   ]);
-
-  useEffect(() => {
-    if (!meshRef.current || !batchedConfig) return;
-
-    batchedConfig.allInstances.forEach((instance, index) => {
-      meshRef.current.setVisibleAt(index, instance.y <= maxLayer);
-    });
-
-    invalidate();
-  }, [batchedConfig, invalidate, maxLayer]);
-
-  useEffect(() => {
-    if (!meshRef.current || !sharedMaterial) return;
-    meshRef.current.material = sharedMaterial;
-    meshRef.current.needsUpdate = true;
-    invalidate();
-  }, [invalidate, sharedMaterial]);
 
   useFrame(({ camera }) => {
     if (!groupRef.current) return;
@@ -370,8 +411,7 @@ function ChunkMesh({ chunk, maxLayer, modelCenter, onChunkBuilt }) {
     );
     frustum.setFromProjectionMatrix(projectionMatrix);
 
-    const centerVector = new THREE.Vector3(...modelCenter);
-    const focusDistance = camera.position.distanceTo(centerVector);
+    const focusDistance = camera.position.distanceTo(modelCenterVector);
     const chunkDistance = camera.position.distanceTo(chunkSphere.center);
     const distanceThreshold = Math.max(96, focusDistance * 1.9);
     const shouldShow =
@@ -380,16 +420,10 @@ function ChunkMesh({ chunk, maxLayer, modelCenter, onChunkBuilt }) {
 
     if (visibilityStateRef.current !== shouldShow) {
       visibilityStateRef.current = shouldShow;
-      setIsChunkVisible(shouldShow);
+      groupRef.current.visible = shouldShow;
       invalidate();
     }
   });
-
-  useEffect(() => {
-    if (groupRef.current) {
-      groupRef.current.visible = isChunkVisible;
-    }
-  }, [isChunkVisible]);
 
   if (!batchedConfig || !sharedMaterial || batchedConfig.maxInstances === 0) {
     return null;
@@ -397,32 +431,30 @@ function ChunkMesh({ chunk, maxLayer, modelCenter, onChunkBuilt }) {
 
   return (
     <group ref={groupRef}>
-      <batchedMesh
-        key={batchedSignature}
-        ref={meshRef}
-        args={[
-          batchedConfig.maxInstances,
-          batchedConfig.maxVertices,
-          batchedConfig.maxIndices,
-          sharedMaterial,
-        ]}
+      <BatchedInstancesMesh
+        batchedConfig={batchedConfig}
         material={sharedMaterial}
-        frustumCulled={false}
-        castShadow
-        receiveShadow
+        onBuilt={(instanceCount) => onChunkBuilt?.(chunk.id, instanceCount)}
       />
     </group>
   );
 }
 
-function SceneContent({ chunks, maxLayer, modelCenter, onChunkBuilt }) {
+function SceneContent({
+  chunks,
+  sliceAxis,
+  sliceLimit,
+  modelCenter,
+  onChunkBuilt,
+}) {
   return (
     <>
       {chunks.map((chunk) => (
         <ChunkMesh
           key={chunk.id}
           chunk={chunk}
-          maxLayer={maxLayer}
+          sliceAxis={sliceAxis}
+          sliceLimit={sliceLimit}
           modelCenter={modelCenter}
           onChunkBuilt={onChunkBuilt}
         />
@@ -654,9 +686,10 @@ function CircularGridFloor({ bounds, dimensions }) {
   return <primitive object={gridHelper} position={position} />;
 }
 
-export function Viewer({ data }) {
+export function Viewer({ data, comparisonMode = false, title = "" }) {
   const [maxLayer, setMaxLayer] = useState(256);
   const [layerBounds, setLayerBounds] = useState({ min: 0, max: 256 });
+  const [sliceAxis, setSliceAxis] = useState("y");
   const [modelCenter, setModelCenter] = useState([0, 0, 0]);
   const [cameraPosition, setCameraPosition] = useState([50, 50, 50]);
   const [showMaterials, setShowMaterials] = useState(false);
@@ -702,9 +735,13 @@ export function Viewer({ data }) {
   const [adaptiveQuality, setAdaptiveQuality] = useState(true);
   const [mountedChunkCount, setMountedChunkCount] = useState(0);
   const [builtChunkMap, setBuiltChunkMap] = useState({});
+  const [sceneVersion, setSceneVersion] = useState(0);
+  const [sceneConfigured, setSceneConfigured] = useState(false);
   const controlsRef = useRef();
+  const canvasRef = useRef(null);
   const preferencesHydratedRef = useRef(false);
-  const frameLoopMode = autoRotate || isAnimating ? "always" : "demand";
+  const frameLoopMode =
+    autoRotate || isAnimating || buildState.visible ? "always" : "demand";
 
   const totalBlockCount = data?.totalBlocks || 0;
   const totalChunks = data?.chunks?.length || 0;
@@ -725,8 +762,15 @@ export function Viewer({ data }) {
       instances: renderedInstanceCount,
       chunks: totalChunks,
       culledFaces: data?.culledFaces || 0,
+      sliceAxis,
     }),
-    [data?.culledFaces, renderedInstanceCount, totalBlockCount, totalChunks],
+    [
+      data?.culledFaces,
+      renderedInstanceCount,
+      sliceAxis,
+      totalBlockCount,
+      totalChunks,
+    ],
   );
 
   const handleRendererDetected = useCallback((backend) => {
@@ -743,6 +787,7 @@ export function Viewer({ data }) {
 
   const handleCanvasCreated = useCallback((state) => {
     const canvas = state.gl?.domElement;
+    canvasRef.current = canvas || null;
     syncRendererDrawingBuffer(
       state.gl,
       canvas,
@@ -815,9 +860,10 @@ export function Viewer({ data }) {
     setEnvironmentPreset(shouldEnablePerformanceMode ? "dawn" : "city");
   }, [adaptiveQuality, renderBackend, totalBlockCount]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!data) return;
 
+    setSceneConfigured(false);
     const { minX, maxX, minY, maxY, minZ, maxZ } = data.bounds;
     const center = data.center || [
       (minX + maxX) / 2,
@@ -826,7 +872,8 @@ export function Viewer({ data }) {
     ];
 
     setModelCenter(center);
-    setLayerBounds({ min: minY, max: maxY });
+    setSliceAxis("y");
+    setLayerBounds(getSliceBounds({ minX, maxX, minY, maxY, minZ, maxZ }, "y"));
     setMaxLayer(maxY);
     setModelBounds({ minX, maxX, minY, maxY, minZ, maxZ });
     setModelDimensions(data.dimensions || { width: 0, height: 0, depth: 0 });
@@ -845,7 +892,7 @@ export function Viewer({ data }) {
     setMountedChunkCount(Math.min(INITIAL_CHUNK_BATCH, data.chunks.length));
     setBuiltChunkMap({});
     setBuildState({
-      stage: "Loading chunks",
+      stage: "Cargando chunks",
       progress: data.chunks.length
         ? (Math.min(INITIAL_CHUNK_BATCH, data.chunks.length) /
             data.chunks.length) *
@@ -856,6 +903,8 @@ export function Viewer({ data }) {
       loadedChunks: 0,
       totalChunks: data.chunks.length,
     });
+    setSceneVersion((current) => current + 1);
+    setSceneConfigured(true);
   }, [data]);
 
   useEffect(() => {
@@ -876,16 +925,22 @@ export function Viewer({ data }) {
   }, [data?.chunks, mountedChunkCount]);
 
   useEffect(() => {
+    const nextBounds = getSliceBounds(modelBounds, sliceAxis);
+    setLayerBounds(nextBounds);
+    setMaxLayer(nextBounds.max);
+  }, [modelBounds, sliceAxis]);
+
+  useEffect(() => {
     if (!totalChunks) return;
 
     setBuildState((current) => ({
       ...current,
       stage:
         mountedChunkCount < totalChunks
-          ? "Streaming chunks"
+          ? "Transmitiendo chunks"
           : current.loadedChunks < totalChunks
-            ? "Building visible chunks"
-            : "Ready",
+            ? "Construyendo chunks visibles"
+            : "Listo",
       progress:
         current.loadedChunks < totalChunks
           ? Math.min(
@@ -916,7 +971,9 @@ export function Viewer({ data }) {
         setBuildState((previous) => ({
           ...previous,
           stage:
-            loadedChunks >= totalChunks ? "Ready" : "Building visible chunks",
+            loadedChunks >= totalChunks
+              ? "Listo"
+              : "Construyendo chunks visibles",
           progress: totalChunks
             ? Math.min(
                 100,
@@ -1017,7 +1074,7 @@ export function Viewer({ data }) {
   );
 
   const handleScreenshot = () => {
-    const canvas = document.querySelector("canvas");
+    const canvas = canvasRef.current;
     if (canvas) {
       const link = document.createElement("a");
       link.download = "litematica_render.png";
@@ -1089,63 +1146,86 @@ export function Viewer({ data }) {
   return (
     <div
       style={{
-        width: "100vw",
-        height: "100vh",
+        width: "100%",
+        height: "100%",
         background: "#141418",
         position: "relative",
         overflow: "hidden",
       }}
     >
-      <Canvas
-        camera={{ position: cameraPosition, fov: 50, near: 0.01, far: 10000 }}
-        dpr={performanceMode ? 1 : [1, 2]}
-        frameloop={frameLoopMode}
-        gl={createRenderer}
-        onCreated={handleCanvasCreated}
-        style={{ position: "relative", zIndex: 1 }}
-      >
-        <SceneBackground color="#141418" />
-        <ambientLight intensity={ambientIntensity} />
-        <RendererResizeSync />
-        <directionalLight
-          position={[10, 20, 10]}
-          intensity={directionalIntensity}
-          castShadow={shadowsEnabled}
-          shadow-mapSize-width={shadowsEnabled ? 2048 : 512}
-          shadow-mapSize-height={shadowsEnabled ? 2048 : 512}
-        />
-        <pointLight position={[-10, -10, -10]} intensity={0.5} />
+      {comparisonMode && title && (
+        <div
+          style={{
+            position: "absolute",
+            top: "10px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 140,
+            padding: "8px 12px",
+            borderRadius: "999px",
+            background: "rgba(10, 12, 20, 0.72)",
+            color: "#f5f7ff",
+            fontSize: "0.82rem",
+            border: "1px solid rgba(255,255,255,0.08)",
+          }}
+        >
+          {title}
+        </div>
+      )}
+      {sceneConfigured && (
+        <Canvas
+          key={sceneVersion}
+          camera={{ position: cameraPosition, fov: 50, near: 0.01, far: 10000 }}
+          dpr={performanceMode ? 1 : [1, 2]}
+          frameloop={frameLoopMode}
+          gl={createRenderer}
+          onCreated={handleCanvasCreated}
+          style={{ position: "relative", zIndex: 1 }}
+        >
+          <SceneBackground color="#141418" />
+          <ambientLight intensity={ambientIntensity} />
+          <RendererResizeSync />
+          <directionalLight
+            position={[10, 20, 10]}
+            intensity={directionalIntensity}
+            castShadow={shadowsEnabled}
+            shadow-mapSize-width={shadowsEnabled ? 2048 : 512}
+            shadow-mapSize-height={shadowsEnabled ? 2048 : 512}
+          />
+          <pointLight position={[-10, -10, -10]} intensity={0.5} />
 
-        <Suspense fallback={null}>
-          <group>
-            <CircularGridFloor
-              bounds={modelBounds}
-              dimensions={modelDimensions}
-            />
-            <SceneContent
-              chunks={visibleChunks}
-              maxLayer={maxLayer}
-              modelCenter={modelCenter}
-              onChunkBuilt={handleChunkBuilt}
-            />
-          </group>
-        </Suspense>
+          <Suspense fallback={null}>
+            <group>
+              <CircularGridFloor
+                bounds={modelBounds}
+                dimensions={modelDimensions}
+              />
+              <SceneContent
+                chunks={visibleChunks}
+                sliceAxis={sliceAxis}
+                sliceLimit={maxLayer}
+                modelCenter={modelCenter}
+                onChunkBuilt={handleChunkBuilt}
+              />
+            </group>
+          </Suspense>
 
-        <RendererStatsTracker onStats={handleRenderStats} />
-        <CameraController
-          position={cameraPosition}
-          target={modelCenter}
-          controlsRef={controlsRef}
-        />
-        <OrbitControls
-          ref={controlsRef}
-          makeDefault
-          target={modelCenter}
-          autoRotate={autoRotate}
-          autoRotateSpeed={4}
-        />
-        {!performanceMode && <Environment preset={environmentPreset} />}
-      </Canvas>
+          <RendererStatsTracker onStats={handleRenderStats} />
+          <CameraController
+            position={cameraPosition}
+            target={modelCenter}
+            controlsRef={controlsRef}
+          />
+          <OrbitControls
+            ref={controlsRef}
+            makeDefault
+            target={modelCenter}
+            autoRotate={autoRotate}
+            autoRotateSpeed={4}
+          />
+          {!performanceMode && <Environment preset={environmentPreset} />}
+        </Canvas>
+      )}
 
       {buildState.visible && (
         <div
@@ -1216,11 +1296,15 @@ export function Viewer({ data }) {
         maxLayer={maxLayer}
         setMaxLayer={setMaxLayer}
         layerBounds={layerBounds}
+        sliceAxis={sliceAxis}
+        setSliceAxis={setSliceAxis}
+        sliceAxisLabel={SLICE_LABELS[sliceAxis]}
         onToggleMaterials={() => setShowMaterials(!showMaterials)}
         showMaterials={showMaterials}
         onScreenshot={handleScreenshot}
         modelDimensions={modelDimensions}
         metadata={data?.metadata || {}}
+        comparisonMode={comparisonMode}
         onCameraPreset={setCameraPreset}
         autoRotate={autoRotate}
         onToggleAutoRotate={() => setAutoRotate(!autoRotate)}

@@ -1,0 +1,102 @@
+.page {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.loadingOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+}
+
+.loadingStage {
+  font-size: 1rem;
+}
+
+.loadingBar {
+  width: min(360px, calc(100vw - 64px));
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.loadingBarFill {
+  height: 100%;
+  background: linear-gradient(90deg, rgba(63, 118, 228, 1) 0%, rgba(121, 195, 255, 1) 100%);
+}
+
+.loadingPercent {
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.errorToast {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(20, 10, 10, 0.88);
+  color: #ff8d8d;
+  z-index: 40;
+}
+
+.viewerGrid {
+  display: grid;
+  width: 100%;
+  height: 100%;
+}
+
+.viewerCell {
+  min-width: 0;
+  height: 100%;
+}
+
+.viewerCellCompare {
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.topActions {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 150;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: calc(100vw - 20px);
+}
+
+.hiddenInput {
+  display: none;
+}
+
+.secondaryButton,
+.primaryButton {
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  color: #fff;
+}
+
+.secondaryButton {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.primaryButton {
+  border: none;
+  background: #3f76e4;
+}

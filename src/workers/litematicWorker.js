@@ -10,7 +10,7 @@ self.onmessage = async (event) => {
   try {
     self.postMessage({
       type: "progress",
-      stage: "Parsing schematic",
+      stage: "Analizando esquema",
       progress: 18,
     });
 
@@ -18,7 +18,7 @@ self.onmessage = async (event) => {
 
     self.postMessage({
       type: "progress",
-      stage: "Preparing chunks",
+      stage: "Preparando chunks",
       progress: 78,
     });
 

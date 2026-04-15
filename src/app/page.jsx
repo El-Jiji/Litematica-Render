@@ -1,30 +1,71 @@
 "use client";
 
 import React, { useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { Upload } from "../components/Upload";
-import { Viewer } from "../components/Viewer";
 import { SocialLinks } from "../components/SocialLinks";
 import { parseLitematic } from "../utils/litematicParser";
+import styles from "./page.module.css";
+
+const MAX_LITEMATIC_FILE_SIZE_MB = 128;
+const MAX_LITEMATIC_FILE_SIZE_BYTES = MAX_LITEMATIC_FILE_SIZE_MB * 1024 * 1024;
+const Viewer = dynamic(
+  () => import("../components/Viewer").then((module) => module.Viewer),
+  {
+    ssr: false,
+  },
+);
 
 export default function Home() {
-  const [data, setData] = useState(null);
+  const [primaryData, setPrimaryData] = useState(null);
+  const [comparisonData, setComparisonData] = useState(null);
   const [loadingState, setLoadingState] = useState({
     active: false,
-    stage: "Waiting",
+    stage: "En espera",
     progress: 0,
+    target: "primary",
   });
   const [error, setError] = useState(null);
   const workerRef = useRef(null);
+  const compareInputRef = useRef(null);
 
-  const handleFileLoaded = async (file) => {
-    setError(null);
-    setLoadingState({
-      active: true,
-      stage: "Reading file",
-      progress: 6,
-    });
+  const validateFile = (file) => {
+    if (!file) {
+      throw new Error("No se selecciono ningun archivo.");
+    }
 
+    const lowerName = file.name.toLowerCase();
+    if (!lowerName.endsWith(".litematic")) {
+      throw new Error("Solo se permiten archivos .litematic.");
+    }
+
+    if (file.size > MAX_LITEMATIC_FILE_SIZE_BYTES) {
+      throw new Error(
+        `El archivo supera el limite recomendado de ${MAX_LITEMATIC_FILE_SIZE_MB} MB.`,
+      );
+    }
+  };
+
+  const applyParsedData = (target, parsedData) => {
+    if (target === "comparison") {
+      setComparisonData(parsedData);
+      return;
+    }
+
+    setPrimaryData(parsedData);
+  };
+
+  const handleFileLoaded = async (file, target = "primary") => {
     try {
+      setError(null);
+      validateFile(file);
+      setLoadingState({
+        active: true,
+        stage: "Leyendo archivo",
+        progress: 6,
+        target,
+      });
+
       if (typeof Worker !== "undefined") {
         workerRef.current?.terminate?.();
         const worker = new Worker(
@@ -42,30 +83,32 @@ export default function Home() {
             if (message.type === "progress") {
               setLoadingState({
                 active: true,
-                stage: message.stage || "Processing",
+                stage: message.stage || "Procesando",
                 progress: message.progress || 0,
+                target,
               });
               return;
             }
 
             if (message.type === "complete") {
-              setData(message.data);
+              applyParsedData(target, message.data);
               setLoadingState({
                 active: false,
-                stage: "Complete",
+                stage: "Completado",
                 progress: 100,
+                target,
               });
               resolve();
               return;
             }
 
             if (message.type === "error") {
-              reject(new Error(message.error || "Worker failed"));
+              reject(new Error(message.error || "El worker fallo"));
             }
           };
 
           worker.onerror = (event) => {
-            reject(event.error || new Error("Worker crashed"));
+            reject(event.error || new Error("El worker se detuvo"));
           };
 
           worker.postMessage(
@@ -79,11 +122,12 @@ export default function Home() {
         });
       } else {
         const parsedData = await parseLitematic(file, { chunkSize: 16 });
-        setData(parsedData);
+        applyParsedData(target, parsedData);
         setLoadingState({
           active: false,
-          stage: "Complete",
+          stage: "Completado",
           progress: 100,
+          target,
         });
       }
     } catch (err) {
@@ -93,6 +137,7 @@ export default function Home() {
         active: false,
         stage: "Error",
         progress: 0,
+        target,
       });
     } finally {
       workerRef.current?.terminate?.();
@@ -100,101 +145,117 @@ export default function Home() {
     }
   };
 
-  const handleReset = () => {
+  const handleReset = (target = "primary") => {
     workerRef.current?.terminate?.();
     workerRef.current = null;
-    setData(null);
+    if (target === "comparison") {
+      setComparisonData(null);
+    } else {
+      setPrimaryData(null);
+      setComparisonData(null);
+    }
     setError(null);
     setLoadingState({
       active: false,
-      stage: "Waiting",
+      stage: "En espera",
       progress: 0,
+      target: "primary",
     });
   };
 
+  const handleComparisonFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      await handleFileLoaded(file, "comparison");
+      event.target.value = "";
+    }
+  };
+
+  const hasComparison = Boolean(comparisonData);
+  const hasPrimary = Boolean(primaryData);
+
   return (
-    <div style={{ width: "100vw", height: "100vh", overflow: "hidden" }}>
+    <div className={styles.page}>
       {loadingState.active && (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background: "rgba(0,0,0,0.8)",
-            color: "white",
-            zIndex: 10,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexDirection: "column",
-            gap: "12px",
-          }}
-        >
-          <div style={{ fontSize: "1rem" }}>{loadingState.stage}</div>
-          <div
-            style={{
-              width: "min(360px, calc(100vw - 64px))",
-              height: "8px",
-              background: "rgba(255,255,255,0.12)",
-              borderRadius: "999px",
-              overflow: "hidden",
-            }}
-          >
+        <div className={styles.loadingOverlay}>
+          <div className={styles.loadingStage}>
+            {loadingState.target === "comparison"
+              ? `Comparando: ${loadingState.stage}`
+              : loadingState.stage}
+          </div>
+          <div className={styles.loadingBar}>
             <div
-              style={{
-                width: `${loadingState.progress}%`,
-                height: "100%",
-                background:
-                  "linear-gradient(90deg, rgba(63,118,228,1) 0%, rgba(121,195,255,1) 100%)",
-              }}
+              className={styles.loadingBarFill}
+              style={{ width: `${loadingState.progress}%` }}
             />
           </div>
-          <div style={{ fontSize: "0.85rem", opacity: 0.8 }}>
+          <div className={styles.loadingPercent}>
             {Math.round(loadingState.progress)}%
           </div>
         </div>
       )}
 
-      {!data ? (
+      {!hasPrimary ? (
         <>
-          <Upload onFileLoaded={handleFileLoaded} />
-          {error && (
-            <div
-              style={{
-                position: "absolute",
-                bottom: "20px",
-                left: "50%",
-                transform: "translateX(-50%)",
-                color: "red",
-                background: "rgba(0,0,0,0.8)",
-                padding: "10px",
-                borderRadius: "5px",
-              }}
-            >
-              {error}
-            </div>
-          )}
+          <Upload onFileLoaded={(file) => handleFileLoaded(file, "primary")} />
+          {error && <div className={styles.errorToast}>{error}</div>}
         </>
       ) : (
         <>
-          <Viewer data={data} />
-          <button
-            onClick={handleReset}
-            className="reset-upload-button"
-            style={{
-              position: "absolute",
-              top: "10px",
-              right: "10px",
-              padding: "10px 20px",
-              background: "#3f76e4",
-              color: "white",
-              border: "none",
-              borderRadius: "5px",
-              cursor: "pointer",
-              zIndex: 90,
-            }}
+          <div
+            className={styles.viewerGrid}
+            style={{ gridTemplateColumns: hasComparison ? "1fr 1fr" : "1fr" }}
           >
-            Subir otro archivo
-          </button>
+            <div className={styles.viewerCell}>
+              <Viewer
+                data={primaryData}
+                title="Archivo principal"
+                comparisonMode={hasComparison}
+              />
+            </div>
+            {hasComparison && (
+              <div className={`${styles.viewerCell} ${styles.viewerCellCompare}`}>
+                <Viewer
+                  data={comparisonData}
+                  title="Archivo de comparacion"
+                  comparisonMode
+                />
+              </div>
+            )}
+          </div>
+          <div className={styles.topActions}>
+            {!hasComparison && (
+              <>
+                <input
+                  ref={compareInputRef}
+                  type="file"
+                  accept=".litematic"
+                  onChange={handleComparisonFileChange}
+                  className={styles.hiddenInput}
+                />
+                <button
+                  onClick={() => compareInputRef.current?.click()}
+                  className={styles.secondaryButton}
+                >
+                  Comparar otro archivo
+                </button>
+              </>
+            )}
+            {hasComparison && (
+              <button
+                onClick={() => handleReset("comparison")}
+                className={styles.secondaryButton}
+              >
+                Cerrar comparacion
+              </button>
+            )}
+            <button
+              onClick={() => handleReset("primary")}
+              className={styles.primaryButton}
+            >
+              Subir otro archivo
+            </button>
+          </div>
         </>
       )}
 

@@ -1,0 +1,190 @@
+.collapsedButton {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 230;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #3f76e4;
+  color: #fff;
+  cursor: pointer;
+}
+
+.panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: min(300px, calc(100% - 56px));
+  height: 100%;
+  padding: 18px;
+  background: rgba(20, 20, 20, 0.88);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  transition: left 0.3s ease;
+  z-index: 220;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  font-family: "Inter", sans-serif;
+}
+
+.panelCollapsed {
+  left: -320px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: -18px;
+  padding-top: 18px;
+  padding-bottom: 8px;
+  background: rgba(20, 20, 20, 0.96);
+  z-index: 1;
+}
+
+.closeButton {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  padding: 0;
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.sectionLabel {
+  font-size: 0.78rem;
+  color: #8eaef3;
+  margin-bottom: 8px;
+}
+
+.monoValue {
+  font-family: monospace;
+  font-size: 0.85rem;
+}
+
+.mutedText {
+  margin-top: 8px;
+  font-size: 0.82rem;
+  color: #ccc;
+}
+
+.metaToggle {
+  background: transparent;
+  border: none;
+  color: #8eaef3;
+  padding: 0;
+  cursor: pointer;
+}
+
+.metaBlock {
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: #bbb;
+}
+
+.metaDetails {
+  margin-top: 8px;
+  line-height: 1.6;
+}
+
+.stats {
+  font-family: monospace;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.viewValue {
+  margin-bottom: 8px;
+  font-size: 0.82rem;
+}
+
+.rangeInput {
+  width: 100%;
+  accent-color: #3f76e4;
+}
+
+.buttonGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.toggleRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 0.82rem;
+}
+
+.checkboxRow {
+  display: flex;
+  gap: 8px;
+  font-size: 0.82rem;
+  margin-bottom: 8px;
+}
+
+.checkboxRowWide {
+  display: flex;
+  gap: 8px;
+  font-size: 0.82rem;
+  margin-bottom: 12px;
+}
+
+.label {
+  font-size: 0.8rem;
+  margin-bottom: 6px;
+}
+
+.select {
+  width: 100%;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.fullButton,
+.presetButton {
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  cursor: pointer;
+}
+
+.presetButton {
+  padding: 8px;
+}
+
+.activeButton {
+  background: #3f76e4;
+}
+
+.hiddenOnCompare {
+  display: block;
+}
+
+@media (max-width: 900px) {
+  .hiddenOnCompare {
+    display: none;
+  }
+}

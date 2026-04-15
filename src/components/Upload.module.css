@@ -1,0 +1,30 @@
+.wrapper {
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed #444;
+  border-radius: 10px;
+  background: #1a1a1a;
+  color: #fff;
+}
+
+.inner {
+  padding: 20px;
+  text-align: center;
+}
+
+.fileLabel {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 10px 20px;
+  border-radius: 5px;
+  background: #3f76e4;
+  cursor: pointer;
+}
+
+.fileInput {
+  display: none;
+}

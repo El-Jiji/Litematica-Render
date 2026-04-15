@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { SocialLinks } from "./SocialLinks";
+import styles from "./Sidebar.module.css";
 
 export function Sidebar({
   renderBackend,
@@ -14,11 +15,15 @@ export function Sidebar({
   maxLayer,
   setMaxLayer,
   layerBounds,
+  sliceAxis,
+  setSliceAxis,
+  sliceAxisLabel,
   onToggleMaterials,
   showMaterials,
   onScreenshot,
   modelDimensions,
   metadata,
+  comparisonMode,
   onCameraPreset,
   autoRotate,
   onToggleAutoRotate,
@@ -38,25 +43,6 @@ export function Sidebar({
   const [collapsed, setCollapsed] = useState(false);
   const [showMetadata, setShowMetadata] = useState(false);
 
-  const panel = {
-    position: "absolute",
-    top: 0,
-    left: collapsed ? "-320px" : "0",
-    width: "min(300px, calc(100vw - 56px))",
-    height: "100vh",
-    padding: "18px",
-    background: "rgba(20,20,20,0.88)",
-    borderRight: "1px solid rgba(255,255,255,0.1)",
-    color: "white",
-    transition: "left 0.3s ease",
-    zIndex: 220,
-    display: "flex",
-    flexDirection: "column",
-    gap: "16px",
-    overflowY: "auto",
-    fontFamily: "'Inter', sans-serif",
-  };
-
   const metadataName = metadata?.Name?.value || metadata?.Name || metadata?.name;
   const metadataAuthor =
     metadata?.Author?.value || metadata?.Author || metadata?.author;
@@ -70,174 +56,143 @@ export function Sidebar({
       ? "WebGPU"
       : renderBackend === "webgl"
         ? "WebGL"
-        : "Detecting...";
-
-  const cardStyle = {
-    background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: "10px",
-    padding: "12px",
-  };
+        : "Detectando...";
 
   return (
     <>
       {collapsed && (
         <button
           onClick={() => setCollapsed(false)}
-          style={{
-            position: "absolute",
-            top: "16px",
-            left: "16px",
-            zIndex: 230,
-            padding: "10px 14px",
-            borderRadius: "8px",
-            border: "1px solid rgba(255,255,255,0.12)",
-            background: "#3f76e4",
-            color: "white",
-            cursor: "pointer",
-          }}
+          className={styles.collapsedButton}
         >
           Menu
         </button>
       )}
 
-      <div style={panel}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            position: "sticky",
-            top: "-18px",
-            paddingTop: "18px",
-            paddingBottom: "8px",
-            background: "rgba(20,20,20,0.96)",
-            zIndex: 1,
-          }}
-        >
-          <strong>Litematica Viewer</strong>
+      <div
+        className={`${styles.panel} ${collapsed ? styles.panelCollapsed : ""}`}
+      >
+        <div className={styles.header}>
+          <strong>{comparisonMode ? "Comparador" : "Visualizador Litematica"}</strong>
           <button
             onClick={() => setCollapsed(true)}
             aria-label="Cerrar menu"
-            style={{
-              background: "rgba(255,255,255,0.08)",
-              border: "1px solid rgba(255,255,255,0.12)",
-              color: "#fff",
-              cursor: "pointer",
-              width: "36px",
-              height: "36px",
-              minWidth: "36px",
-              display: "grid",
-              placeItems: "center",
-              lineHeight: 1,
-              padding: 0,
-            }}
+            className={styles.closeButton}
           >
             x
           </button>
         </div>
 
-        <div style={cardStyle}>
-          <div style={{ fontSize: "0.78rem", color: "#8eaef3", marginBottom: "8px" }}>
-            MODEL
-          </div>
-          <div style={{ fontFamily: "monospace", fontSize: "0.85rem" }}>
+        <div className={styles.card}>
+          <div className={styles.sectionLabel}>MODELO</div>
+          <div className={styles.monoValue}>
             {modelDimensions.width} x {modelDimensions.height} x {modelDimensions.depth}
           </div>
-          <div style={{ marginTop: "8px", fontSize: "0.82rem", color: "#ccc" }}>
-            Renderer: {renderBackendLabel}
-          </div>
+          <div className={styles.mutedText}>Renderizador: {renderBackendLabel}</div>
           {metadataName && (
-            <div style={{ marginTop: "10px", fontSize: "0.8rem", color: "#bbb" }}>
+            <div className={styles.metaBlock}>
               <button
                 onClick={() => setShowMetadata((value) => !value)}
-                style={{ background: "transparent", border: "none", color: "#8eaef3", padding: 0, cursor: "pointer" }}
+                className={styles.metaToggle}
               >
-                {showMetadata ? "Hide" : "Show"} metadata
+                {showMetadata ? "Ocultar" : "Mostrar"} metadatos
               </button>
               {showMetadata && (
-                <div style={{ marginTop: "8px", lineHeight: 1.6 }}>
-                  <div>Name: {metadataName}</div>
-                  {metadataAuthor && <div>Author: {metadataAuthor}</div>}
-                  {metadataDescription && <div>Description: {metadataDescription}</div>}
+                <div className={styles.metaDetails}>
+                  <div>Nombre: {metadataName}</div>
+                  {metadataAuthor && <div>Autor: {metadataAuthor}</div>}
+                  {metadataDescription && <div>Descripcion: {metadataDescription}</div>}
                 </div>
               )}
             </div>
           )}
         </div>
 
-        <div style={cardStyle}>
-          <div style={{ fontSize: "0.78rem", color: "#8eaef3", marginBottom: "8px" }}>
-            STATS
-          </div>
-          <div style={{ fontFamily: "monospace", fontSize: "0.82rem", lineHeight: 1.6 }}>
-            <div>Calls: {renderStats.calls}</div>
-            <div>Triangles: {renderStats.triangles.toLocaleString()}</div>
-            <div>Blocks: {sceneSummary.totalBlocks.toLocaleString()}</div>
-            <div>Instances: {sceneSummary.instances.toLocaleString()}</div>
+        <div className={styles.card}>
+          <div className={styles.sectionLabel}>ESTADISTICAS</div>
+          <div className={styles.stats}>
+            <div>Llamadas de dibujo: {renderStats.calls}</div>
+            <div>Triangulos: {renderStats.triangles.toLocaleString()}</div>
+            <div>Bloques: {sceneSummary.totalBlocks.toLocaleString()}</div>
+            <div>Instancias: {sceneSummary.instances.toLocaleString()}</div>
             <div>Chunks: {(sceneSummary.chunks || 0).toLocaleString()}</div>
-            <div>Hidden Faces: {(sceneSummary.culledFaces || 0).toLocaleString()}</div>
+            <div>Caras ocultas: {(sceneSummary.culledFaces || 0).toLocaleString()}</div>
+            <div>Slice activo: {sliceAxisLabel}</div>
           </div>
         </div>
 
-        <div style={cardStyle}>
-          <div style={{ fontSize: "0.78rem", color: "#8eaef3", marginBottom: "8px" }}>
-            VIEW
+        <div className={styles.card}>
+          <div className={styles.sectionLabel}>VISTA</div>
+          <div className={styles.viewValue}>
+            Corte {sliceAxisLabel}: {maxLayer}
           </div>
-          <div style={{ marginBottom: "8px", fontSize: "0.82rem" }}>
-            Layer limit: {maxLayer}
-          </div>
+          <select
+            value={sliceAxis}
+            onChange={(event) => setSliceAxis(event.target.value)}
+            className={styles.select}
+          >
+            <option value="x">Eje X</option>
+            <option value="y">Eje Y</option>
+            <option value="z">Eje Z</option>
+          </select>
           <input
             type="range"
             min={layerBounds.min}
             max={layerBounds.max}
             value={maxLayer}
             onChange={(event) => setMaxLayer(Number(event.target.value))}
-            style={{ width: "100%", accentColor: "#3f76e4" }}
+            className={styles.rangeInput}
           />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "10px" }}>
+          <div className={styles.buttonGrid}>
             {["front", "side", "top", "isometric"].map((preset) => (
               <button
                 key={preset}
                 onClick={() => onCameraPreset(preset)}
-                style={{
-                  padding: "8px",
-                  borderRadius: "8px",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  background: "rgba(255,255,255,0.05)",
-                  color: "white",
-                  cursor: "pointer",
-                }}
+                className={styles.presetButton}
               >
-                {preset === "isometric" ? "Iso" : preset}
+                {preset === "front"
+                  ? "Frente"
+                  : preset === "side"
+                    ? "Lado"
+                    : preset === "top"
+                      ? "Superior"
+                      : "Iso"}
               </button>
             ))}
           </div>
-          <label style={{ display: "flex", gap: "8px", marginTop: "10px", fontSize: "0.82rem" }}>
+          <label className={styles.toggleRow}>
             <input type="checkbox" checked={autoRotate} onChange={onToggleAutoRotate} />
-            Auto-rotate
+            Auto-rotacion
           </label>
         </div>
 
-        <div style={cardStyle}>
-          <div style={{ fontSize: "0.78rem", color: "#8eaef3", marginBottom: "8px" }}>
-            PERFORMANCE
-          </div>
-          <label style={{ display: "flex", gap: "8px", fontSize: "0.82rem", marginBottom: "8px" }}>
-            <input type="checkbox" checked={adaptiveQuality} onChange={(event) => setAdaptiveQuality(event.target.checked)} />
-            Adaptive quality
+        <div className={`${styles.card} ${comparisonMode ? styles.hiddenOnCompare : ""}`}>
+          <div className={styles.sectionLabel}>RENDIMIENTO</div>
+          <label className={styles.checkboxRow}>
+            <input
+              type="checkbox"
+              checked={adaptiveQuality}
+              onChange={(event) => setAdaptiveQuality(event.target.checked)}
+            />
+            Calidad adaptativa
           </label>
-          <label style={{ display: "flex", gap: "8px", fontSize: "0.82rem", marginBottom: "8px" }}>
-            <input type="checkbox" checked={performanceMode} onChange={(event) => setPerformanceMode(event.target.checked)} />
-            Performance mode
+          <label className={styles.checkboxRow}>
+            <input
+              type="checkbox"
+              checked={performanceMode}
+              onChange={(event) => setPerformanceMode(event.target.checked)}
+            />
+            Modo rendimiento
           </label>
-          <label style={{ display: "flex", gap: "8px", fontSize: "0.82rem", marginBottom: "12px" }}>
-            <input type="checkbox" checked={shadowsEnabled} onChange={(event) => setShadowsEnabled(event.target.checked)} />
-            Shadows
+          <label className={styles.checkboxRowWide}>
+            <input
+              type="checkbox"
+              checked={shadowsEnabled}
+              onChange={(event) => setShadowsEnabled(event.target.checked)}
+            />
+            Sombras
           </label>
-          <div style={{ fontSize: "0.8rem", marginBottom: "6px" }}>
-            Ambient {ambientIntensity.toFixed(1)}
-          </div>
+          <div className={styles.label}>Luz ambiente {ambientIntensity.toFixed(1)}</div>
           <input
             type="range"
             min="0"
@@ -245,10 +200,10 @@ export function Sidebar({
             step="0.1"
             value={ambientIntensity}
             onChange={(event) => setAmbientIntensity(Number(event.target.value))}
-            style={{ width: "100%", accentColor: "#3f76e4", marginBottom: "10px" }}
+            className={styles.rangeInput}
           />
-          <div style={{ fontSize: "0.8rem", marginBottom: "6px" }}>
-            Directional {directionalIntensity.toFixed(1)}
+          <div className={styles.label}>
+            Luz direccional {directionalIntensity.toFixed(1)}
           </div>
           <input
             type="range"
@@ -257,78 +212,38 @@ export function Sidebar({
             step="0.1"
             value={directionalIntensity}
             onChange={(event) => setDirectionalIntensity(Number(event.target.value))}
-            style={{ width: "100%", accentColor: "#3f76e4", marginBottom: "10px" }}
+            className={styles.rangeInput}
           />
           <select
             value={environmentPreset}
             onChange={(event) => setEnvironmentPreset(event.target.value)}
-            style={{
-              width: "100%",
-              padding: "8px",
-              borderRadius: "8px",
-              border: "1px solid rgba(255,255,255,0.08)",
-              background: "rgba(255,255,255,0.05)",
-              color: "white",
-            }}
+            className={styles.select}
           >
-            <option value="dawn">Dawn</option>
-            <option value="city">Daylight</option>
-            <option value="sunset">Sunset</option>
-            <option value="night">Night</option>
+            <option value="dawn">Amanecer</option>
+            <option value="city">Dia</option>
+            <option value="sunset">Atardecer</option>
+            <option value="night">Noche</option>
           </select>
         </div>
 
-        <div style={cardStyle}>
-          <div style={{ fontSize: "0.78rem", color: "#8eaef3", marginBottom: "8px" }}>
-            ACTIONS
-          </div>
+        <div className={styles.card}>
+          <div className={styles.sectionLabel}>ACCIONES</div>
           <button
             onClick={onToggleMaterials}
-            style={{
-              width: "100%",
-              padding: "10px",
-              marginBottom: "8px",
-              borderRadius: "8px",
-              border: "1px solid rgba(255,255,255,0.08)",
-              background: showMaterials ? "#3f76e4" : "rgba(255,255,255,0.05)",
-              color: "white",
-              cursor: "pointer",
-            }}
+            className={`${styles.fullButton} ${showMaterials ? styles.activeButton : ""}`}
           >
-            Material list
+            Lista de materiales
           </button>
-          <button
-            onClick={onScreenshot}
-            style={{
-              width: "100%",
-              padding: "10px",
-              marginBottom: "8px",
-              borderRadius: "8px",
-              border: "1px solid rgba(255,255,255,0.08)",
-              background: "rgba(255,255,255,0.05)",
-              color: "white",
-              cursor: "pointer",
-            }}
-          >
-            Screenshot
+          <button onClick={onScreenshot} className={styles.fullButton}>
+            Captura
           </button>
           <button
             onClick={onToggleBuildAnimation}
-            style={{
-              width: "100%",
-              padding: "10px",
-              borderRadius: "8px",
-              border: "1px solid rgba(255,255,255,0.08)",
-              background: isAnimating ? "#3f76e4" : "rgba(255,255,255,0.05)",
-              color: "white",
-              cursor: "pointer",
-            }}
+            className={`${styles.fullButton} ${isAnimating ? styles.activeButton : ""}`}
           >
-            {isAnimating ? "Stop" : "Play"} build animation
+            {isAnimating ? "Detener" : "Iniciar"} animacion de construccion
           </button>
-          <div style={{ fontSize: "0.8rem", marginTop: "10px", marginBottom: "6px" }}>
-            Animation speed {animationSpeed}ms
-          </div>
+          <div className={styles.label}>Velocidad de animacion {animationSpeed} ms</div>
           <input
             type="range"
             min="10"
@@ -336,14 +251,12 @@ export function Sidebar({
             step="10"
             value={animationSpeed}
             onChange={(event) => setAnimationSpeed(Number(event.target.value))}
-            style={{ width: "100%", accentColor: "#3f76e4" }}
+            className={styles.rangeInput}
           />
         </div>
 
-        <div className="sidebar-mobile-links" style={cardStyle}>
-          <div style={{ fontSize: "0.78rem", color: "#8eaef3", marginBottom: "8px" }}>
-            LINKS
-          </div>
+        <div className={`sidebar-mobile-links ${styles.card}`}>
+          <div className={styles.sectionLabel}>ENLACES</div>
           <SocialLinks inline />
         </div>
       </div>
