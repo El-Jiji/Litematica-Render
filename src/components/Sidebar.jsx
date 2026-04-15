@@ -27,14 +27,13 @@ export function Sidebar({
   onCameraPreset,
   autoRotate,
   onToggleAutoRotate,
-  ambientIntensity,
-  setAmbientIntensity,
-  directionalIntensity,
-  setDirectionalIntensity,
-  environmentPreset,
-  setEnvironmentPreset,
-  shadowsEnabled,
-  setShadowsEnabled,
+  lightingMode,
+  setLightingMode,
+  timeOfDay,
+  setTimeOfDay,
+  lightingDescription,
+  showSkyBackground,
+  setShowSkyBackground,
   isAnimating,
   onToggleBuildAnimation,
   animationSpeed,
@@ -167,6 +166,38 @@ export function Sidebar({
         </div>
 
         <div className={`${styles.card} ${comparisonMode ? styles.hiddenOnCompare : ""}`}>
+          <div className={styles.sectionLabel}>ILUMINACION</div>
+          <select
+            value={lightingMode}
+            onChange={(event) => setLightingMode(event.target.value)}
+            className={styles.select}
+          >
+            <option value="game">Juego</option>
+            <option value="cinematic">Cinematica</option>
+            <option value="night">Noche</option>
+          </select>
+          <div className={styles.lightingHelp}>{lightingDescription}</div>
+          <div className={styles.label}>Hora del dia {timeOfDay}:00</div>
+          <input
+            type="range"
+            min="0"
+            max="23"
+            step="1"
+            value={timeOfDay}
+            onChange={(event) => setTimeOfDay(Number(event.target.value))}
+            className={styles.rangeInput}
+          />
+          <label className={styles.checkboxRow}>
+            <input
+              type="checkbox"
+              checked={showSkyBackground}
+              onChange={(event) => setShowSkyBackground(event.target.checked)}
+            />
+            Fondo azul estilo Minecraft
+          </label>
+        </div>
+
+        <div className={`${styles.card} ${comparisonMode ? styles.hiddenOnCompare : ""}`}>
           <div className={styles.sectionLabel}>RENDIMIENTO</div>
           <label className={styles.checkboxRow}>
             <input
@@ -184,46 +215,9 @@ export function Sidebar({
             />
             Modo rendimiento
           </label>
-          <label className={styles.checkboxRowWide}>
-            <input
-              type="checkbox"
-              checked={shadowsEnabled}
-              onChange={(event) => setShadowsEnabled(event.target.checked)}
-            />
-            Sombras
-          </label>
-          <div className={styles.label}>Luz ambiente {ambientIntensity.toFixed(1)}</div>
-          <input
-            type="range"
-            min="0"
-            max="2"
-            step="0.1"
-            value={ambientIntensity}
-            onChange={(event) => setAmbientIntensity(Number(event.target.value))}
-            className={styles.rangeInput}
-          />
-          <div className={styles.label}>
-            Luz direccional {directionalIntensity.toFixed(1)}
+          <div className={styles.lightingHelp}>
+            Las sombras se ajustan solas segun el modo y la hora.
           </div>
-          <input
-            type="range"
-            min="0"
-            max="3"
-            step="0.1"
-            value={directionalIntensity}
-            onChange={(event) => setDirectionalIntensity(Number(event.target.value))}
-            className={styles.rangeInput}
-          />
-          <select
-            value={environmentPreset}
-            onChange={(event) => setEnvironmentPreset(event.target.value)}
-            className={styles.select}
-          >
-            <option value="dawn">Amanecer</option>
-            <option value="city">Dia</option>
-            <option value="sunset">Atardecer</option>
-            <option value="night">Noche</option>
-          </select>
         </div>
 
         <div className={styles.card}>

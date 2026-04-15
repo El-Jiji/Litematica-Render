@@ -152,6 +152,13 @@
   margin-bottom: 6px;
 }
 
+.lightingHelp {
+  margin-top: 8px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: #becaea;
+}
+
 .select {
   width: 100%;
   padding: 8px;

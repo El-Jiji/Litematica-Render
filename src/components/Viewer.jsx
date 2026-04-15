@@ -11,18 +11,23 @@ import React, {
   useState,
 } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, Environment } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { MaterialList } from "./MaterialList";
 import { Sidebar } from "./Sidebar";
+import { SceneLighting } from "./SceneLighting";
 import { resourceManager } from "../utils/engine/ResourceManager";
+import { getLightingState } from "../utils/lighting/getLightingState";
+import {
+  LIGHTING_MODES,
+  LIGHTING_MODE_OPTIONS,
+} from "../utils/lighting/lightPresets";
 
 const VIEWER_PREFERENCES_KEY = "litematica-viewer-preferences";
 const LARGE_BUILD_THRESHOLD = 25000;
 const INITIAL_CHUNK_BATCH = 8;
 const PROGRESSIVE_CHUNK_BATCH = 6;
 const CHUNK_BATCH_INTERVAL_MS = 120;
-const DEFAULT_RARE_BLOCK_THRESHOLD = 64;
 const SLICE_LABELS = {
   x: "X",
   y: "Y",
@@ -487,6 +492,25 @@ function RendererStatsTracker({ onStats }) {
   return null;
 }
 
+function FpsTracker({ onFps }) {
+  const accumulatorRef = useRef(0);
+  const framesRef = useRef(0);
+
+  useFrame((_, delta) => {
+    accumulatorRef.current += delta;
+    framesRef.current += 1;
+
+    if (accumulatorRef.current < 0.5) return;
+
+    const fps = Math.round(framesRef.current / accumulatorRef.current);
+    onFps(fps);
+    accumulatorRef.current = 0;
+    framesRef.current = 0;
+  });
+
+  return null;
+}
+
 function RendererResizeSync() {
   const { gl, camera, size, viewport, invalidate } = useThree();
 
@@ -602,22 +626,7 @@ function CameraController({ position, target, controlsRef }) {
   return null;
 }
 
-function SceneBackground({ color = "#2f2f32" }) {
-  const { scene } = useThree();
-
-  useEffect(() => {
-    const previousBackground = scene.background;
-    scene.background = new THREE.Color(color);
-
-    return () => {
-      scene.background = previousBackground;
-    };
-  }, [color, scene]);
-
-  return null;
-}
-
-function CircularGridFloor({ bounds, dimensions }) {
+function CircularGridFloor({ bounds, dimensions, majorColor, minorColor, opacity }) {
   const floorSize = useMemo(() => {
     const width = dimensions?.width || bounds.maxX - bounds.minX + 1 || 0;
     const depth = dimensions?.depth || bounds.maxZ - bounds.minZ + 1 || 0;
@@ -639,18 +648,18 @@ function CircularGridFloor({ bounds, dimensions }) {
     const helper = new THREE.GridHelper(
       floorSize,
       floorSize,
-      "#8fb7ff",
-      "#d6e4ff",
+      majorColor,
+      minorColor,
     );
 
     helper.material.transparent = true;
-    helper.material.opacity = 0.14;
+    helper.material.opacity = opacity;
     helper.material.depthWrite = false;
     helper.material.toneMapped = false;
     helper.renderOrder = -1;
 
     return helper;
-  }, [floorSize]);
+  }, [floorSize, majorColor, minorColor, opacity]);
 
   useEffect(
     () => () => {
@@ -707,13 +716,13 @@ export function Viewer({ data, comparisonMode = false, title = "" }) {
     maxZ: 0,
   });
   const [autoRotate, setAutoRotate] = useState(false);
-  const [ambientIntensity, setAmbientIntensity] = useState(0.6);
-  const [directionalIntensity, setDirectionalIntensity] = useState(1.0);
-  const [environmentPreset, setEnvironmentPreset] = useState("city");
-  const [shadowsEnabled, setShadowsEnabled] = useState(true);
+  const [lightingMode, setLightingMode] = useState(LIGHTING_MODES.game);
+  const [timeOfDay, setTimeOfDay] = useState(12);
+  const [showSkyBackground, setShowSkyBackground] = useState(true);
   const [isAnimating, setIsAnimating] = useState(false);
   const [animationSpeed, setAnimationSpeed] = useState(50);
   const [renderBackend, setRenderBackend] = useState("detecting");
+  const [fps, setFps] = useState(0);
   const [renderStats, setRenderStats] = useState({
     calls: 0,
     triangles: 0,
@@ -750,6 +759,25 @@ export function Viewer({ data, comparisonMode = false, title = "" }) {
     () => (data?.chunks || []).slice(0, mountedChunkCount),
     [data?.chunks, mountedChunkCount],
   );
+  const lightingState = useMemo(
+    () => getLightingState(lightingMode, timeOfDay),
+    [lightingMode, timeOfDay],
+  );
+  const gridStyle = useMemo(() => {
+    if (!showSkyBackground || lightingMode === LIGHTING_MODES.night) {
+      return {
+        majorColor: "#f5f7ff",
+        minorColor: "#d6e4ff",
+        opacity: 0.14,
+      };
+    }
+
+    return {
+      majorColor: "#2a3f66",
+      minorColor: "#4f6894",
+      opacity: 0.22,
+    };
+  }, [lightingMode, showSkyBackground]);
 
   const renderedInstanceCount = useMemo(
     () => Object.values(builtChunkMap).reduce((sum, value) => sum + value, 0),
@@ -811,17 +839,19 @@ export function Viewer({ data, comparisonMode = false, title = "" }) {
     if (typeof storedPreferences.adaptiveQuality === "boolean") {
       setAdaptiveQuality(storedPreferences.adaptiveQuality);
     }
-    if (typeof storedPreferences.shadowsEnabled === "boolean") {
-      setShadowsEnabled(storedPreferences.shadowsEnabled);
+    if (
+      typeof storedPreferences.lightingMode === "string" &&
+      LIGHTING_MODE_OPTIONS.some(
+        (option) => option.value === storedPreferences.lightingMode,
+      )
+    ) {
+      setLightingMode(storedPreferences.lightingMode);
     }
-    if (typeof storedPreferences.ambientIntensity === "number") {
-      setAmbientIntensity(storedPreferences.ambientIntensity);
+    if (typeof storedPreferences.timeOfDay === "number") {
+      setTimeOfDay(storedPreferences.timeOfDay);
     }
-    if (typeof storedPreferences.directionalIntensity === "number") {
-      setDirectionalIntensity(storedPreferences.directionalIntensity);
-    }
-    if (typeof storedPreferences.environmentPreset === "string") {
-      setEnvironmentPreset(storedPreferences.environmentPreset);
+    if (typeof storedPreferences.showSkyBackground === "boolean") {
+      setShowSkyBackground(storedPreferences.showSkyBackground);
     }
 
     preferencesHydratedRef.current = true;
@@ -833,18 +863,16 @@ export function Viewer({ data, comparisonMode = false, title = "" }) {
     saveViewerPreferences({
       performanceMode,
       adaptiveQuality,
-      shadowsEnabled,
-      ambientIntensity,
-      directionalIntensity,
-      environmentPreset,
+      lightingMode,
+      timeOfDay,
+      showSkyBackground,
     });
   }, [
     adaptiveQuality,
-    ambientIntensity,
-    directionalIntensity,
-    environmentPreset,
+    lightingMode,
     performanceMode,
-    shadowsEnabled,
+    showSkyBackground,
+    timeOfDay,
   ]);
 
   useEffect(() => {
@@ -854,10 +882,6 @@ export function Viewer({ data, comparisonMode = false, title = "" }) {
       totalBlockCount >= LARGE_BUILD_THRESHOLD || renderBackend === "webgpu";
 
     setPerformanceMode(shouldEnablePerformanceMode);
-    setShadowsEnabled(!shouldEnablePerformanceMode);
-    setAmbientIntensity(shouldEnablePerformanceMode ? 0.75 : 0.6);
-    setDirectionalIntensity(shouldEnablePerformanceMode ? 0.85 : 1.0);
-    setEnvironmentPreset(shouldEnablePerformanceMode ? "dawn" : "city");
   }, [adaptiveQuality, renderBackend, totalBlockCount]);
 
   useLayoutEffect(() => {
@@ -1013,12 +1037,6 @@ export function Viewer({ data, comparisonMode = false, title = "" }) {
 
   const handlePerformanceModeChange = useCallback((enabled) => {
     setPerformanceMode(enabled);
-
-    if (enabled) {
-      setShadowsEnabled(false);
-      setAmbientIntensity(0.75);
-      setDirectionalIntensity(0.85);
-    }
   }, []);
 
   const handleAdaptiveQualityChange = useCallback((enabled) => {
@@ -1182,23 +1200,22 @@ export function Viewer({ data, comparisonMode = false, title = "" }) {
           onCreated={handleCanvasCreated}
           style={{ position: "relative", zIndex: 1 }}
         >
-          <SceneBackground color="#141418" />
-          <ambientLight intensity={ambientIntensity} />
           <RendererResizeSync />
-          <directionalLight
-            position={[10, 20, 10]}
-            intensity={directionalIntensity}
-            castShadow={shadowsEnabled}
-            shadow-mapSize-width={shadowsEnabled ? 2048 : 512}
-            shadow-mapSize-height={shadowsEnabled ? 2048 : 512}
+          <SceneLighting
+            lightingState={lightingState}
+            performanceMode={performanceMode}
+            bounds={modelBounds}
+            showSkyBackground={showSkyBackground}
           />
-          <pointLight position={[-10, -10, -10]} intensity={0.5} />
 
           <Suspense fallback={null}>
             <group>
               <CircularGridFloor
                 bounds={modelBounds}
                 dimensions={modelDimensions}
+                majorColor={gridStyle.majorColor}
+                minorColor={gridStyle.minorColor}
+                opacity={gridStyle.opacity}
               />
               <SceneContent
                 chunks={visibleChunks}
@@ -1211,6 +1228,7 @@ export function Viewer({ data, comparisonMode = false, title = "" }) {
           </Suspense>
 
           <RendererStatsTracker onStats={handleRenderStats} />
+          <FpsTracker onFps={setFps} />
           <CameraController
             position={cameraPosition}
             target={modelCenter}
@@ -1223,7 +1241,6 @@ export function Viewer({ data, comparisonMode = false, title = "" }) {
             autoRotate={autoRotate}
             autoRotateSpeed={4}
           />
-          {!performanceMode && <Environment preset={environmentPreset} />}
         </Canvas>
       )}
 
@@ -1285,6 +1302,24 @@ export function Viewer({ data, comparisonMode = false, title = "" }) {
         </div>
       )}
 
+      <div
+        style={{
+          position: "absolute",
+          left: "12px",
+          bottom: "12px",
+          zIndex: 118,
+          padding: "4px 7px",
+          borderRadius: "8px",
+          background: "rgba(10, 12, 20, 0.68)",
+          color: "rgba(245,247,255,0.88)",
+          fontSize: "0.72rem",
+          fontFamily: "monospace",
+          pointerEvents: "none",
+        }}
+      >
+        {fps} FPS
+      </div>
+
       <Sidebar
         renderBackend={renderBackend}
         renderStats={renderStats}
@@ -1308,14 +1343,13 @@ export function Viewer({ data, comparisonMode = false, title = "" }) {
         onCameraPreset={setCameraPreset}
         autoRotate={autoRotate}
         onToggleAutoRotate={() => setAutoRotate(!autoRotate)}
-        ambientIntensity={ambientIntensity}
-        setAmbientIntensity={setAmbientIntensity}
-        directionalIntensity={directionalIntensity}
-        setDirectionalIntensity={setDirectionalIntensity}
-        environmentPreset={environmentPreset}
-        setEnvironmentPreset={setEnvironmentPreset}
-        shadowsEnabled={shadowsEnabled}
-        setShadowsEnabled={setShadowsEnabled}
+        lightingMode={lightingMode}
+        setLightingMode={setLightingMode}
+        timeOfDay={timeOfDay}
+        setTimeOfDay={setTimeOfDay}
+        lightingDescription={lightingState.description}
+        showSkyBackground={showSkyBackground}
+        setShowSkyBackground={setShowSkyBackground}
         isAnimating={isAnimating}
         onToggleBuildAnimation={toggleBuildAnimation}
         animationSpeed={animationSpeed}
