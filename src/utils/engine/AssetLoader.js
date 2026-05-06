@@ -17,6 +17,26 @@ const ATLAS_TEXTURE_SOURCES = [
   `${LOCAL_RENDER_ASSETS_BASE}/atlas.png`,
   'https://raw.githubusercontent.com/misode/mcmeta/atlas/all/atlas.png',
 ];
+const MAX_ATLAS_ANIMATIONS = 48;
+const ANIMATED_ATLAS_TEXTURES = new Set([
+  "block/water_still",
+  "block/water_flow",
+  "block/lava_still",
+  "block/lava_flow",
+  "block/fire_0",
+  "block/fire_1",
+  "block/soul_fire_0",
+  "block/soul_fire_1",
+  "block/kelp",
+  "block/kelp_plant",
+  "block/seagrass",
+  "block/tall_seagrass_bottom",
+  "block/tall_seagrass_top",
+]);
+const BLOCKSTATE_ALIASES = {
+  chain: "iron_chain",
+};
+
 class AssetLoader {
   constructor() {
     this.blockstates = null;
@@ -26,6 +46,7 @@ class AssetLoader {
     this.atlasTexture = null;
     this.textures = new Map();
     this.loadingPromise = null;
+    this.atlasAnimationRegions = null;
   }
 
   async init() {
@@ -112,19 +133,75 @@ class AssetLoader {
 
     const atlasWidth = this.atlasTexture.image.width;
     const atlasHeight = this.atlasTexture.image.height;
-    // misode uv: [x, y, w, h] in pixels
+    // misode uv: [x, y, w, h] in pixels. Animated textures are stored
+    // as vertical frame strips, so static UVs should address the first frame.
+    const frameHeight = uv[3] > uv[2] && uv[2] > 0 ? uv[2] : uv[3];
     return [
       uv[0] / atlasWidth,
       uv[1] / atlasHeight,
       (uv[0] + uv[2]) / atlasWidth,
-      (uv[1] + uv[3]) / atlasHeight
+      (uv[1] + frameHeight) / atlasHeight
     ];
+  }
+
+  getFallbackAtlasUV() {
+    if (!this.atlasTexture?.image) return null;
+
+    const atlasWidth = this.atlasTexture.image.width || 1;
+    const atlasHeight = this.atlasTexture.image.height || 1;
+    const tileSize = Math.min(16, atlasWidth, atlasHeight);
+
+    return [
+      0,
+      0,
+      tileSize / atlasWidth,
+      tileSize / atlasHeight,
+    ];
+  }
+
+  getAtlasAnimationRegions() {
+    if (this.atlasAnimationRegions) return this.atlasAnimationRegions;
+    if (!this.atlasUVs || !this.atlasTexture?.image) return [];
+
+    const atlasWidth = this.atlasTexture.image.width || 1;
+    const atlasHeight = this.atlasTexture.image.height || 1;
+    const regions = [];
+
+    for (const [key, uv] of Object.entries(this.atlasUVs)) {
+      const [x, y, width, height] = uv;
+      if (
+        !ANIMATED_ATLAS_TEXTURES.has(key) ||
+        height <= width ||
+        width <= 0
+      ) {
+        continue;
+      }
+
+      const frameCount = Math.floor(height / width);
+      if (frameCount <= 1) continue;
+
+      regions.push({
+        region: [
+          x / atlasWidth,
+          1 - (y + width) / atlasHeight,
+          (x + width) / atlasWidth,
+          1 - y / atlasHeight,
+        ],
+        frameHeight: width / atlasHeight,
+        frameCount,
+      });
+
+      if (regions.length >= MAX_ATLAS_ANIMATIONS) break;
+    }
+
+    this.atlasAnimationRegions = regions;
+    return regions;
   }
 
   async getBlockState(blockName) {
     await this.init();
     const id = blockName.startsWith('minecraft:') ? blockName.split(':')[1] : blockName;
-    return this.blockstates?.[id] || null;
+    return this.blockstates?.[id] || this.blockstates?.[BLOCKSTATE_ALIASES[id]] || null;
   }
 
   async getModel(modelPath) {
@@ -178,7 +255,7 @@ class AssetLoader {
     let current = textureRef;
 
     if (typeof current === 'object') {
-      current = current.id || current.texture || current.path || null;
+      current = current.id || current.texture || current.path || current.sprite || null;
     }
 
     if (typeof current !== 'string') {
@@ -190,7 +267,7 @@ class AssetLoader {
       const key = current.slice(1);
       current = textures?.[key];
       if (typeof current === 'object') {
-        current = current?.id || current?.texture || current?.path || null;
+        current = current?.id || current?.texture || current?.path || current?.sprite || null;
       }
       if (!current) return null;
       depth++;

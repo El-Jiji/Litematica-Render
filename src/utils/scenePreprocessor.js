@@ -58,7 +58,19 @@ const NON_FULL_BLOCK_SUFFIXES = [
   "_skull",
   "_head",
 ];
+const NON_OCCLUDING_BLOCK_SUFFIXES = [
+  "_glass",
+  "_stained_glass",
+  "_ice",
+  "_leaves",
+];
 const NON_FULL_BLOCK_NAMES = new Set([
+  "minecraft:grass",
+  "minecraft:short_grass",
+  "minecraft:tall_grass",
+  "minecraft:grass_block",
+  "minecraft:fern",
+  "minecraft:large_fern",
   "minecraft:cactus",
   "minecraft:bamboo",
   "minecraft:scaffolding",
@@ -77,6 +89,19 @@ const NON_FULL_BLOCK_NAMES = new Set([
   "minecraft:small_amethyst_bud",
   "minecraft:medium_amethyst_bud",
   "minecraft:large_amethyst_bud",
+  "minecraft:glass",
+  "minecraft:tinted_glass",
+  "minecraft:water",
+  "minecraft:lava",
+  "minecraft:ice",
+  "minecraft:packed_ice",
+  "minecraft:blue_ice",
+  "minecraft:slime_block",
+  "minecraft:honey_block",
+  "minecraft:kelp",
+  "minecraft:kelp_plant",
+  "minecraft:seagrass",
+  "minecraft:tall_seagrass",
 ]);
 const SHAPE_CHANGING_PROPS = new Set([
   "type",
@@ -115,6 +140,10 @@ function isOccludingCube(blockName, props = {}) {
   }
 
   const simpleName = blockName.replace("minecraft:", "");
+  if (NON_OCCLUDING_BLOCK_SUFFIXES.some((suffix) => simpleName.endsWith(suffix))) {
+    return false;
+  }
+
   if (NON_FULL_BLOCK_SUFFIXES.some((suffix) => simpleName.endsWith(suffix))) {
     return false;
   }

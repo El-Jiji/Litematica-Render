@@ -1,5 +1,4 @@
 import "./globals.css";
-import Script from "next/script";
 import { Analytics } from "@vercel/analytics/next";
 
 export const metadata = {
@@ -14,18 +13,6 @@ export default function RootLayout({ children }) {
         <meta
           name="google-site-verification"
           content="jj8umSgUSyogvEwNDRRw-yJed2MT4TS7cPTfI43LntM"
-        />
-        <Script
-          id="block-map-loader"
-          strategy="beforeInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `
-              fetch('/mc/block_textures_map.json')
-                .then(r => r.json())
-                .then(data => { globalThis.FULL_BLOCK_MAP = data; })
-                .catch(() => { console.warn('No se pudo cargar el mapeo oficial de bloques'); });
-            `,
-          }}
         />
       </head>
       <body>

@@ -4,7 +4,6 @@ import React, { useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { Upload } from "../components/Upload";
 import { SocialLinks } from "../components/SocialLinks";
-import { parseLitematic } from "../utils/litematicParser";
 import styles from "./page.module.css";
 
 const MAX_LITEMATIC_FILE_SIZE_MB = 128;
@@ -121,6 +120,7 @@ export default function Home() {
           );
         });
       } else {
+        const { parseLitematic } = await import("../utils/litematicParser");
         const parsedData = await parseLitematic(file, { chunkSize: 16 });
         applyParsedData(target, parsedData);
         setLoadingState({

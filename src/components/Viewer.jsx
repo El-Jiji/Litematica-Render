@@ -212,16 +212,6 @@ function BatchedInstancesMesh({
     invalidate();
   }, [batchedConfig, batchedSignature, invalidate, material, onBuilt, scaleScalar]);
 
-  useEffect(() => {
-    if (!meshRef.current || !batchedConfig) return;
-
-    batchedConfig.allInstances.forEach((instance, index) => {
-      meshRef.current.setVisibleAt(index, true);
-    });
-
-    invalidate();
-  }, [batchedConfig, invalidate]);
-
   if (!batchedConfig || !material || batchedConfig.maxInstances === 0) {
     return null;
   }
@@ -492,6 +482,17 @@ function RendererStatsTracker({ onStats }) {
   return null;
 }
 
+function AtlasAnimationTicker() {
+  const invalidate = useThree((state) => state.invalidate);
+
+  useFrame(({ clock }) => {
+    resourceManager.updateAtlasAnimations(clock.elapsedTime);
+    invalidate();
+  });
+
+  return null;
+}
+
 function FpsTracker({ onFps }) {
   const accumulatorRef = useRef(0);
   const framesRef = useRef(0);
@@ -746,11 +747,14 @@ export function Viewer({ data, comparisonMode = false, title = "" }) {
   const [builtChunkMap, setBuiltChunkMap] = useState({});
   const [sceneVersion, setSceneVersion] = useState(0);
   const [sceneConfigured, setSceneConfigured] = useState(false);
+  const [hasAtlasAnimations, setHasAtlasAnimations] = useState(false);
   const controlsRef = useRef();
   const canvasRef = useRef(null);
   const preferencesHydratedRef = useRef(false);
   const frameLoopMode =
-    autoRotate || isAnimating || buildState.visible ? "always" : "demand";
+    autoRotate || isAnimating || buildState.visible || hasAtlasAnimations
+      ? "always"
+      : "demand";
 
   const totalBlockCount = data?.totalBlocks || 0;
   const totalChunks = data?.chunks?.length || 0;
@@ -883,6 +887,20 @@ export function Viewer({ data, comparisonMode = false, title = "" }) {
 
     setPerformanceMode(shouldEnablePerformanceMode);
   }, [adaptiveQuality, renderBackend, totalBlockCount]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    resourceManager.getSharedMaterial().then(() => {
+      if (!isCancelled) {
+        setHasAtlasAnimations(resourceManager.hasAtlasAnimations());
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   useLayoutEffect(() => {
     if (!data) return;
@@ -1228,6 +1246,7 @@ export function Viewer({ data, comparisonMode = false, title = "" }) {
           </Suspense>
 
           <RendererStatsTracker onStats={handleRenderStats} />
+          {hasAtlasAnimations && <AtlasAnimationTicker />}
           <FpsTracker onFps={setFps} />
           <CameraController
             position={cameraPosition}
