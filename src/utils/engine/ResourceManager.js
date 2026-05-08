@@ -57,17 +57,24 @@ function shouldRenderWaterOverlay(blockName, props = {}) {
 }
 
 function ensureColorAttribute(geometry, color = [1, 1, 1]) {
-  if (!geometry || geometry.getAttribute("color")) return geometry;
+  if (!geometry) return geometry;
 
   const position = geometry.getAttribute("position");
   if (!position) return geometry;
 
-  const colors = [];
-  for (let i = 0; i < position.count; i += 1) {
-    colors.push(color[0], color[1], color[2]);
+  if (!geometry.getAttribute("color")) {
+    const colors = [];
+    for (let i = 0; i < position.count; i += 1) {
+      colors.push(color[0], color[1], color[2]);
+    }
+    geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
   }
 
-  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  if (!geometry.getAttribute("ao")) {
+    const aoValues = new Float32Array(position.count).fill(1.0);
+    geometry.setAttribute("ao", new THREE.Float32BufferAttribute(aoValues, 1));
+  }
+
   return geometry;
 }
 
@@ -97,7 +104,12 @@ function patchAtlasAnimationShader(material, animationRegions) {
     atlasAnimationFrameHeights: { value: paddedFrameHeights },
   };
 
+  // Store the previous onBeforeCompile if any
+  const prevOnBeforeCompile = material.onBeforeCompile;
   material.onBeforeCompile = (shader) => {
+    // Run AO patch first if it was set
+    if (prevOnBeforeCompile) prevOnBeforeCompile(shader);
+
     Object.assign(shader.uniforms, material.userData.atlasAnimationUniforms);
     shader.fragmentShader = `
       uniform float atlasAnimationTime;
@@ -141,7 +153,7 @@ class ResourceManager {
   constructor() {
     this.geometryCache = new Map();
     this.sharedMaterial = null;
-    this.maxCachedGeometries = 900;
+    this.maxCachedGeometries = 4000;
   }
 
   async getSharedMaterial() {
@@ -161,7 +173,36 @@ class ResourceManager {
         depthWrite: true,
         side: THREE.FrontSide,
         vertexColors: true,
+        roughness: 1.0,
+        metalness: 0.0,
+        flatShading: false,
+        fog: true,
       });
+
+      // Inject AO vertex attribute into the shader
+      this.sharedMaterial.onBeforeCompile = (shader) => {
+        // Add AO varying and attribute to vertex shader
+        shader.vertexShader = shader.vertexShader.replace(
+          'void main() {',
+          `attribute float ao;
+           varying float vAO;
+           void main() {
+             vAO = ao;`,
+        );
+
+        // Apply AO darkening in fragment shader after color/lighting
+        shader.fragmentShader = shader.fragmentShader.replace(
+          'void main() {',
+          `varying float vAO;
+           void main() {`,
+        );
+        shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <dithering_fragment>',
+          `gl_FragColor.rgb *= vAO;
+           #include <dithering_fragment>`,
+        );
+      };
+
       patchAtlasAnimationShader(this.sharedMaterial, animationRegions);
     }
     return this.sharedMaterial;
@@ -179,7 +220,7 @@ class ResourceManager {
     if (uniform) uniform.value = elapsedTime;
   }
 
-  async getBlockData(blockName, props, visibleFaces = 63) {
+  async getBlockData(blockName, props, visibleFaces = 63, occlusionMap = null, blockX = 0, blockY = 0, blockZ = 0) {
     let blockState = null;
 
     try {
@@ -208,13 +249,9 @@ class ResourceManager {
       return fallback ? { ...fallback, material, kind: "fallback" } : null;
     }
 
-    // Optimization: Group by "Model Layout"
-    // Variants is an array of { model, x, y, uvlock }
-    // We want a unique key for the GEOMETRY (without x,y if we rotate it via instance matrix)
-    // BUT some blocks need baked rotation (like those with non-90 deg rotations or complex elements)
-    // For simplicity now, let's keep baking for anything that isn't a simple 90-deg rotation if needed.
-    // Actually, let's group by "variants string" but WITHOUT x,y.
     const waterOverlay = shouldRenderWaterOverlay(blockName, props);
+    // Include AO-relevant position in geometry key when occlusionMap is available
+    const aoSuffix = occlusionMap ? `::ao${blockX},${blockY},${blockZ}` : '';
     const geometryKey = `${variants
       .map(
         (variant) =>
@@ -222,17 +259,24 @@ class ResourceManager {
             variant.uvlock ? 1 : 0
           }@z${variant.z || 0}`,
       )
-      .join("|")}::${visibleFaces}::t${getTintColor(blockName, props).join(",")}::w${waterOverlay}`;
+      .join("|")}::${visibleFaces}::t${getTintColor(blockName, props).join(",")}::w${waterOverlay}${aoSuffix}`;
     
     let geometry = this.geometryCache.get(geometryKey);
     let didCreateGeometry = false;
     if (geometry === undefined) {
+      const buildOptions = { tintColor: getTintColor(blockName, props) };
+      if (occlusionMap) {
+        buildOptions.aoData = {
+          blockX, blockY, blockZ,
+          occlusionMap,
+        };
+      }
       geometry = await GeometryBuilder.build(
         variants,
         assetLoader,
         true,
         visibleFaces,
-        { tintColor: getTintColor(blockName, props) },
+        buildOptions,
       );
       didCreateGeometry = true;
     }
@@ -250,6 +294,7 @@ class ResourceManager {
 
       if (waterOverlay) {
         ensureColorAttribute(geometry);
+        ensureColorAttribute(waterOverlay);
         geometry = BufferGeometryUtils.mergeGeometries([geometry, waterOverlay]);
       }
     }

@@ -17,6 +17,7 @@
     "@types/three": "^0.182.0",
     "@vercel/analytics": "^1.6.1",
     "buffer": "^6.0.3",
+    "minecraft-data": "^3.109.1",
     "nbt": "^0.8.1",
     "next": "^15.1.0",
     "pako": "^2.1.0",

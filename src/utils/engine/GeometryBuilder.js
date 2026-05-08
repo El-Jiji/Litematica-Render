@@ -1,6 +1,110 @@
 import * as THREE from "three";
 import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUtils";
 
+const NON_OCCLUDING_BLOCK_SUFFIXES = [
+  "_glass",
+  "_stained_glass",
+  "_pane",
+  "_ice",
+  "_leaves",
+  "_crop",
+  "_stem",
+  "_door",
+  "_trapdoor",
+  "_fence",
+  "_fence_gate",
+  "_wall",
+  "_sign",
+];
+const NON_FULL_BLOCK_NAMES = new Set([
+  "minecraft:grass",
+  "minecraft:short_grass",
+  "minecraft:tall_grass",
+  "minecraft:fern",
+  "minecraft:large_fern",
+  "minecraft:cactus",
+  "minecraft:bamboo",
+  "minecraft:scaffolding",
+  "minecraft:ladder",
+  "minecraft:campfire",
+  "minecraft:soul_campfire",
+  "minecraft:hopper",
+  "minecraft:cauldron",
+  "minecraft:anvil",
+  "minecraft:chest",
+  "minecraft:trapped_chest",
+  "minecraft:ender_chest",
+  "minecraft:lectern",
+  "minecraft:bell",
+  "minecraft:amethyst_cluster",
+  "minecraft:small_amethyst_bud",
+  "minecraft:medium_amethyst_bud",
+  "minecraft:large_amethyst_bud",
+  "minecraft:glass",
+  "minecraft:tinted_glass",
+  "minecraft:water",
+  "minecraft:lava",
+  "minecraft:ice",
+  "minecraft:packed_ice",
+  "minecraft:blue_ice",
+  "minecraft:frosted_ice",
+  "minecraft:slime_block",
+  "minecraft:honey_block",
+  "minecraft:kelp",
+  "minecraft:kelp_plant",
+  "minecraft:seagrass",
+  "minecraft:tall_seagrass",
+  "minecraft:wheat",
+  "minecraft:carrots",
+  "minecraft:potatoes",
+  "minecraft:beetroots",
+  "minecraft:nether_wart",
+  "minecraft:sugar_cane",
+  "minecraft:cocoa",
+  "minecraft:attached_melon_stem",
+  "minecraft:attached_pumpkin_stem",
+  "minecraft:dandelion",
+  "minecraft:poppy",
+  "minecraft:blue_orchid",
+  "minecraft:allium",
+  "minecraft:azure_bluet",
+  "minecraft:red_tulip",
+  "minecraft:orange_tulip",
+  "minecraft:white_tulip",
+  "minecraft:pink_tulip",
+  "minecraft:oxeye_daisy",
+  "minecraft:cornflower",
+  "minecraft:lily_of_the_valley",
+  "minecraft:wither_rose",
+  "minecraft:sunflower",
+  "minecraft:lilac",
+  "minecraft:rose_bush",
+  "minecraft:peony",
+  "minecraft:dirt_path",
+  "minecraft:farmland",
+  "minecraft:snow",
+  "minecraft:end_rod",
+  "minecraft:chorus_plant",
+  "minecraft:chorus_flower",
+  "minecraft:cobweb",
+  "minecraft:spawner",
+  "minecraft:lantern",
+  "minecraft:soul_lantern",
+  "minecraft:lightning_rod",
+  "minecraft:pointed_dripstone",
+  "minecraft:sweet_berry_bush",
+  "minecraft:cave_vines",
+  "minecraft:cave_vines_plant",
+  "minecraft:glow_lichen",
+  "minecraft:sculk_vein",
+  "minecraft:azalea",
+  "minecraft:flowering_azalea",
+  "minecraft:big_dripleaf",
+  "minecraft:small_dripleaf",
+  "minecraft:hanging_roots",
+  "minecraft:spore_blossom",
+]);
+
 const FACE_ORDER = ["east", "west", "up", "down", "south", "north"];
 const FACE_BITS = {
   east: 1,
@@ -10,6 +114,57 @@ const FACE_BITS = {
   south: 16,
   north: 32,
 };
+// Minecraft-style face shading multipliers (same as BlueMap / vanilla smooth lighting)
+const FACE_SHADE_MULTIPLIERS = {
+  up: 1.0,
+  down: 0.5,
+  north: 0.8,
+  south: 0.8,
+  east: 0.6,
+  west: 0.6,
+};
+
+// AO neighbor offsets per face per vertex (Minecraft smooth lighting algorithm)
+// For each face, for each of the 4 vertices, the 3 neighbors to check (2 sides + 1 corner)
+const AO_NEIGHBOR_OFFSETS = {
+  up: [
+    [[-1,1,0],[0,1,-1],[-1,1,-1]],
+    [[-1,1,0],[0,1,1],[-1,1,1]],
+    [[1,1,0],[0,1,1],[1,1,1]],
+    [[1,1,0],[0,1,-1],[1,1,-1]],
+  ],
+  down: [
+    [[-1,-1,0],[0,-1,-1],[-1,-1,-1]],
+    [[1,-1,0],[0,-1,-1],[1,-1,-1]],
+    [[1,-1,0],[0,-1,1],[1,-1,1]],
+    [[-1,-1,0],[0,-1,1],[-1,-1,1]],
+  ],
+  north: [
+    [[-1,0,-1],[0,-1,-1],[-1,-1,-1]],
+    [[-1,0,-1],[0,1,-1],[-1,1,-1]],
+    [[1,0,-1],[0,1,-1],[1,1,-1]],
+    [[1,0,-1],[0,-1,-1],[1,-1,-1]],
+  ],
+  south: [
+    [[-1,0,1],[0,-1,1],[-1,-1,1]],
+    [[1,0,1],[0,-1,1],[1,-1,1]],
+    [[1,0,1],[0,1,1],[1,1,1]],
+    [[-1,0,1],[0,1,1],[-1,1,1]],
+  ],
+  east: [
+    [[1,0,-1],[1,-1,0],[1,-1,-1]],
+    [[1,0,-1],[1,1,0],[1,1,-1]],
+    [[1,0,1],[1,1,0],[1,1,1]],
+    [[1,0,1],[1,-1,0],[1,-1,1]],
+  ],
+  west: [
+    [[- 1,0,-1],[- 1,-1,0],[- 1,-1,-1]],
+    [[-1,0,1],[-1,-1,0],[-1,-1,1]],
+    [[-1,0,1],[-1,1,0],[-1,1,1]],
+    [[-1,0,-1],[-1,1,0],[-1,1,-1]],
+  ],
+};
+
 const FACE_NORMALS = {
   east: new THREE.Vector3(1, 0, 0),
   west: new THREE.Vector3(-1, 0, 0),
@@ -201,6 +356,10 @@ function mapUvToAtlas(uv, atlasUV) {
   const [au1, av1, au2, av2] = atlasUV;
   const atlasWidth = au2 - au1;
   const atlasHeight = av2 - av1;
+  
+  // Tiny inset margin (approx 0.2 pixels on a 1024 atlas) to prevent texture bleeding
+  const bleedMargin = 0.0002;
+
   const raw = [
     [uv[0], uv[3]],
     [uv[2], uv[3]],
@@ -208,10 +367,19 @@ function mapUvToAtlas(uv, atlasUV) {
     [uv[0], uv[1]],
   ];
 
-  return raw.map(([u, v]) => [
-    au1 + (u / 16) * atlasWidth,
-    1 - (av1 + (v / 16) * atlasHeight),
-  ]);
+  return raw.map(([u, v]) => {
+    let mappedU = au1 + (u / 16) * atlasWidth;
+    let mappedV = av1 + (v / 16) * atlasHeight;
+
+    // Apply inset only at the edges of the tile bounds
+    if (u <= 0.1) mappedU += bleedMargin;
+    else if (u >= 15.9) mappedU -= bleedMargin;
+    
+    if (v <= 0.1) mappedV += bleedMargin;
+    else if (v >= 15.9) mappedV -= bleedMargin;
+
+    return [mappedU, 1 - mappedV];
+  });
 }
 
 function buildGeometryFromArrays(positions, normals, uvs, indices) {
@@ -274,7 +442,9 @@ export class GeometryBuilder {
     const uvs = [];
     const indices = [];
     const colors = [];
+    const aoValues = [];
     const tintColor = options.tintColor || [1, 1, 1];
+    const aoData = options.aoData || null; // { blockX, blockY, blockZ, occlusionMap }
     const variantMatrix = bakeVariantRotation
       ? createVariantRotationMatrix(x, y, z)
       : null;
@@ -311,6 +481,17 @@ export class GeometryBuilder {
 
         if (!atlasUV) continue;
 
+        // Face shading — Minecraft/BlueMap style directional multiplier
+        const shade = FACE_SHADE_MULTIPLIERS[side] || 0.8;
+
+        // Compute per-vertex AO for this face
+        let vertexAO = [1, 1, 1, 1]; // default: no AO
+        if (aoData && canCullSimpleFaces) {
+          vertexAO = GeometryBuilder.computeVertexAO(
+            side, aoData.blockX, aoData.blockY, aoData.blockZ, aoData.occlusionMap,
+          );
+        }
+
         const faceVertices = getFaceVertices(side, from, to);
         const transformedNormal = FACE_NORMALS[side]
           .clone()
@@ -322,7 +503,7 @@ export class GeometryBuilder {
           mapUvToAtlas(uv, atlasUV),
           faceData.rotation || 0,
         );
-        const faceColor = Number.isInteger(faceData.tintindex)
+        const baseFaceColor = Number.isInteger(faceData.tintindex)
           ? tintColor
           : [1, 1, 1];
 
@@ -335,7 +516,13 @@ export class GeometryBuilder {
             transformedNormal.z,
           );
           uvs.push(atlasCoords[index][0], atlasCoords[index][1]);
-          colors.push(faceColor[0], faceColor[1], faceColor[2]);
+          // Multiply vertex color by face shading
+          colors.push(
+            baseFaceColor[0] * shade,
+            baseFaceColor[1] * shade,
+            baseFaceColor[2] * shade,
+          );
+          aoValues.push(vertexAO[index]);
         });
 
         indices.push(
@@ -352,6 +539,38 @@ export class GeometryBuilder {
     if (positions.length === 0) return null;
     const geometry = buildGeometryFromArrays(positions, normals, uvs, indices);
     geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+    geometry.setAttribute("ao", new THREE.Float32BufferAttribute(aoValues, 1));
     return geometry;
+  }
+
+  /**
+   * Compute per-vertex AO for a face using Minecraft's smooth lighting algorithm.
+   * For each vertex, check 3 neighbors (2 edge + 1 corner) and compute occlusion.
+   * Returns array of 4 AO values (0.0=fully occluded, 1.0=fully lit).
+   */
+  static computeVertexAO(face, bx, by, bz, occlusionMap) {
+    const offsets = AO_NEIGHBOR_OFFSETS[face];
+    if (!offsets || !occlusionMap) return [1, 1, 1, 1];
+
+    const result = [];
+    for (let v = 0; v < 4; v++) {
+      const [side1Off, side2Off, cornerOff] = offsets[v];
+      const side1 = occlusionMap[`${bx+side1Off[0]},${by+side1Off[1]},${bz+side1Off[2]}`] ? 1 : 0;
+      const side2 = occlusionMap[`${bx+side2Off[0]},${by+side2Off[1]},${bz+side2Off[2]}`] ? 1 : 0;
+      const corner = occlusionMap[`${bx+cornerOff[0]},${by+cornerOff[1]},${bz+cornerOff[2]}`] ? 1 : 0;
+
+      // Minecraft AO formula
+      let ao;
+      if (side1 && side2) {
+        ao = 0; // both sides are solid, corner is fully occluded
+      } else {
+        ao = 3 - (side1 + side2 + corner);
+      }
+      // Map to 0.0-1.0 range with a curve for softer look
+      const aoNorm = ao / 3.0;
+      // Apply a slight curve to make the AO effect more pronounced
+      result.push(0.2 + aoNorm * 0.8);
+    }
+    return result;
   }
 }

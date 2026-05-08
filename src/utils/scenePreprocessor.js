@@ -1,4 +1,5 @@
 import { parseLitematicBuffer } from "./litematicParserCore";
+import { TRANSPARENT_BLOCKS } from "./transparentBlocks";
 
 const CHUNK_SIZE = 16;
 const FACE_BITS = {
@@ -59,50 +60,51 @@ const NON_FULL_BLOCK_SUFFIXES = [
   "_head",
 ];
 const NON_OCCLUDING_BLOCK_SUFFIXES = [
+  "_slab",
+  "_stairs",
+  "_wall",
+  "_fence",
+  "_fence_gate",
+  "_door",
+  "_trapdoor",
+  "_pane",
+  "_bars",
+  "_button",
+  "_pressure_plate",
+  "_sign",
+  "_hanging_sign",
+  "_banner",
+  "_bed",
+  "_rail",
+  "_torch",
+  "_lantern",
+  "_chain",
+  "_rod",
+  "_carpet",
+  "_coral",
+  "_coral_fan",
+  "_sapling",
+  "_flower",
+  "_tulip",
+  "_orchid",
+  "_daisy",
+  "_bush",
+  "_vines",
+  "_vine",
+  "_roots",
+  "_fungus",
+  "_mushroom",
+  "_crop",
+  "_dripleaf",
+  "_candle",
+  "_skull",
+  "_head",
   "_glass",
   "_stained_glass",
   "_ice",
   "_leaves",
+  "_stem",
 ];
-const NON_FULL_BLOCK_NAMES = new Set([
-  "minecraft:grass",
-  "minecraft:short_grass",
-  "minecraft:tall_grass",
-  "minecraft:grass_block",
-  "minecraft:fern",
-  "minecraft:large_fern",
-  "minecraft:cactus",
-  "minecraft:bamboo",
-  "minecraft:scaffolding",
-  "minecraft:ladder",
-  "minecraft:campfire",
-  "minecraft:soul_campfire",
-  "minecraft:hopper",
-  "minecraft:cauldron",
-  "minecraft:anvil",
-  "minecraft:chest",
-  "minecraft:trapped_chest",
-  "minecraft:ender_chest",
-  "minecraft:lectern",
-  "minecraft:bell",
-  "minecraft:amethyst_cluster",
-  "minecraft:small_amethyst_bud",
-  "minecraft:medium_amethyst_bud",
-  "minecraft:large_amethyst_bud",
-  "minecraft:glass",
-  "minecraft:tinted_glass",
-  "minecraft:water",
-  "minecraft:lava",
-  "minecraft:ice",
-  "minecraft:packed_ice",
-  "minecraft:blue_ice",
-  "minecraft:slime_block",
-  "minecraft:honey_block",
-  "minecraft:kelp",
-  "minecraft:kelp_plant",
-  "minecraft:seagrass",
-  "minecraft:tall_seagrass",
-]);
 const SHAPE_CHANGING_PROPS = new Set([
   "type",
   "half",
@@ -135,16 +137,27 @@ function encodeBlockCoord(x, y, z) {
 }
 
 function isOccludingCube(blockName, props = {}) {
-  if (NON_FULL_BLOCK_NAMES.has(blockName)) {
+  const simpleName = blockName.replace("minecraft:", "");
+
+  if (TRANSPARENT_BLOCKS.has(simpleName)) {
     return false;
   }
 
-  const simpleName = blockName.replace("minecraft:", "");
   if (NON_OCCLUDING_BLOCK_SUFFIXES.some((suffix) => simpleName.endsWith(suffix))) {
     return false;
   }
 
-  if (NON_FULL_BLOCK_SUFFIXES.some((suffix) => simpleName.endsWith(suffix))) {
+  // Certain blocks like cactus or chest are not in the transparent set 
+  // but they aren't full cubes either. Let's catch them.
+  const NON_FULL_HARDCODED = new Set([
+    "cactus", "chest", "trapped_chest", "ender_chest", "hopper", "cauldron", 
+    "anvil", "lectern", "bell", "scaffolding", "ladder", "campfire", "soul_campfire",
+    "daylight_detector", "stonecutter", "grindstone", "brewing_stand", "composter",
+    "turtle_egg", "sniffer_egg", "conduit", "beacon", "shulker_box", "sculk_sensor", 
+    "sculk_shrieker", "dirt_path", "farmland", "snow", "slime_block", "honey_block"
+  ]);
+
+  if (NON_FULL_HARDCODED.has(simpleName)) {
     return false;
   }
 
@@ -371,6 +384,12 @@ export function buildProcessedScene(parsed, options = {}) {
     }))
     .sort((a, b) => b.count - a.count);
 
+  // Convert occupiedBlocks to a plain object for serialization
+  const occupiedBlocksObj = {};
+  for (const [key, value] of occupiedBlocks) {
+    occupiedBlocksObj[key] = value.occludingCube;
+  }
+
   return {
     metadata: normalizeMetadata(parsed.metadata),
     materials: materialsList,
@@ -386,6 +405,7 @@ export function buildProcessedScene(parsed, options = {}) {
       depth: maxZ - minZ + 1,
     },
     center,
+    occupiedBlocks: occupiedBlocksObj,
   };
 }
 

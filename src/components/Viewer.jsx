@@ -241,6 +241,7 @@ function ChunkMesh({
   sliceLimit,
   modelCenter,
   onChunkBuilt,
+  occlusionMap,
 }) {
   const groupRef = useRef(null);
   const invalidate = useThree((state) => state.invalidate);
@@ -290,13 +291,16 @@ function ChunkMesh({
 
         for (const block of chunk.blocks) {
           const propKey = JSON.stringify(block.props || {});
-          const key = `${block.name}|${propKey}|${block.visibleFaces}`;
+          const key = `${block.name}|${propKey}|${block.visibleFaces}|${block.x},${block.y},${block.z}`;
 
           if (!stateMap.has(key)) {
             stateMap.set(key, {
               name: block.name,
               props: block.props || {},
               visibleFaces: block.visibleFaces,
+              x: block.x,
+              y: block.y,
+              z: block.z,
             });
             statePromises.push(
               (async () => {
@@ -304,6 +308,10 @@ function ChunkMesh({
                   block.name,
                   block.props || {},
                   block.visibleFaces,
+                  occlusionMap || null,
+                  block.x,
+                  block.y,
+                  block.z,
                 );
                 if (data) {
                   stateMap.get(key).data = data;
@@ -323,7 +331,7 @@ function ChunkMesh({
 
         for (const block of chunk.blocks) {
           const propKey = JSON.stringify(block.props || {});
-          const key = `${block.name}|${propKey}|${block.visibleFaces}`;
+          const key = `${block.name}|${propKey}|${block.visibleFaces}|${block.x},${block.y},${block.z}`;
           const stateInfo = stateMap.get(key);
 
           if (!stateInfo?.data?.geometry) continue;
@@ -390,6 +398,7 @@ function ChunkMesh({
     onChunkBuilt,
     sliceAxis,
     sliceLimit,
+    occlusionMap,
   ]);
 
   useFrame(({ camera }) => {
@@ -441,6 +450,7 @@ function SceneContent({
   sliceLimit,
   modelCenter,
   onChunkBuilt,
+  occlusionMap,
 }) {
   return (
     <>
@@ -452,6 +462,7 @@ function SceneContent({
           sliceLimit={sliceLimit}
           modelCenter={modelCenter}
           onChunkBuilt={onChunkBuilt}
+          occlusionMap={occlusionMap}
         />
       ))}
     </>
@@ -631,7 +642,7 @@ function CircularGridFloor({ bounds, dimensions, majorColor, minorColor, opacity
   const floorSize = useMemo(() => {
     const width = dimensions?.width || bounds.maxX - bounds.minX + 1 || 0;
     const depth = dimensions?.depth || bounds.maxZ - bounds.minZ + 1 || 0;
-    return Math.max(24, Math.ceil(Math.max(width, depth) * 1.8));
+    return Math.max(24, Math.ceil(Math.max(width, depth) * 2.2));
   }, [
     bounds.maxX,
     bounds.maxZ,
@@ -641,59 +652,92 @@ function CircularGridFloor({ bounds, dimensions, majorColor, minorColor, opacity
     dimensions?.width,
   ]);
 
-  const gridHelper = useMemo(() => {
-    if (floorSize <= 0) {
-      return null;
-    }
+  const floorMaterial = useMemo(() => {
+    return new THREE.ShaderMaterial({
+      uniforms: {
+        gridColor: { value: new THREE.Color(majorColor) },
+        gridSubColor: { value: new THREE.Color(minorColor) },
+        baseOpacity: { value: opacity },
+        floorSize: { value: floorSize },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        varying vec2 vWorldPos;
+        void main() {
+          vUv = uv;
+          vec4 worldPos = modelMatrix * vec4(position, 1.0);
+          vWorldPos = worldPos.xz;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 gridColor;
+        uniform vec3 gridSubColor;
+        uniform float baseOpacity;
+        uniform float floorSize;
+        varying vec2 vUv;
+        varying vec2 vWorldPos;
 
-    const helper = new THREE.GridHelper(
-      floorSize,
-      floorSize,
-      majorColor,
-      minorColor,
-    );
+        void main() {
+          // Grid pattern (1-block grid)
+          vec2 grid = abs(fract(vWorldPos - 0.5) - 0.5);
+          float line = min(grid.x, grid.y);
+          float gridLine = 1.0 - smoothstep(0.0, 0.06, line);
 
-    helper.material.transparent = true;
-    helper.material.opacity = opacity;
-    helper.material.depthWrite = false;
-    helper.material.toneMapped = false;
-    helper.renderOrder = -1;
+          // Major grid every 16 blocks (chunk boundaries)
+          vec2 majorGrid = abs(fract(vWorldPos / 16.0) - 0.5);
+          float majorLine = min(majorGrid.x, majorGrid.y);
+          float majorGridLine = 1.0 - smoothstep(0.0, 0.02, majorLine);
 
-    return helper;
-  }, [floorSize, majorColor, minorColor, opacity]);
+          // Radial fadeout
+          vec2 centered = vUv - 0.5;
+          float dist = length(centered) * 2.0;
+          float fade = 1.0 - smoothstep(0.3, 0.95, dist);
+
+          // Combine
+          vec3 color = mix(gridSubColor, gridColor, majorGridLine);
+          float alpha = max(gridLine * 0.4, majorGridLine * 0.8) * baseOpacity * fade;
+
+          gl_FragColor = vec4(color, alpha);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+  }, [majorColor, minorColor, opacity, floorSize]);
+
+  useEffect(() => {
+    floorMaterial.uniforms.gridColor.value.set(majorColor);
+    floorMaterial.uniforms.gridSubColor.value.set(minorColor);
+    floorMaterial.uniforms.baseOpacity.value = opacity;
+    floorMaterial.uniforms.floorSize.value = floorSize;
+  }, [majorColor, minorColor, opacity, floorSize, floorMaterial]);
 
   useEffect(
     () => () => {
-      if (!gridHelper) return;
-      gridHelper.geometry.dispose();
-      gridHelper.material.dispose();
+      floorMaterial.dispose();
     },
-    [gridHelper],
+    [floorMaterial],
   );
 
   const position = useMemo(
     () => {
-      const modelSpanX = bounds.maxX - bounds.minX + 1;
-      const modelSpanZ = bounds.maxZ - bounds.minZ + 1;
-      const floorMinX = Math.floor(
-        bounds.minX - (floorSize - modelSpanX) / 2,
-      );
-      const floorMinZ = Math.floor(
-        bounds.minZ - (floorSize - modelSpanZ) / 2,
-      );
-
-      return [
-        floorMinX + floorSize / 2,
-        bounds.minY - 0.02,
-        floorMinZ + floorSize / 2,
-      ];
+      const cx = (bounds.minX + bounds.maxX + 1) / 2;
+      const cz = (bounds.minZ + bounds.maxZ + 1) / 2;
+      return [cx, bounds.minY - 0.02, cz];
     },
-    [bounds.maxX, bounds.maxZ, bounds.minX, bounds.minY, bounds.minZ, floorSize],
+    [bounds.maxX, bounds.maxZ, bounds.minX, bounds.minY, bounds.minZ],
   );
 
-  if (!gridHelper || floorSize <= 0) return null;
+  if (floorSize <= 0) return null;
 
-  return <primitive object={gridHelper} position={position} />;
+  return (
+    <mesh position={position} rotation={[-Math.PI / 2, 0, 0]} renderOrder={-1}>
+      <planeGeometry args={[floorSize, floorSize]} />
+      <primitive object={floorMaterial} attach="material" />
+    </mesh>
+  );
 }
 
 export function Viewer({ data, comparisonMode = false, title = "" }) {
@@ -1241,6 +1285,7 @@ export function Viewer({ data, comparisonMode = false, title = "" }) {
                 sliceLimit={maxLayer}
                 modelCenter={modelCenter}
                 onChunkBuilt={handleChunkBuilt}
+                occlusionMap={data?.occupiedBlocks || null}
               />
             </group>
           </Suspense>

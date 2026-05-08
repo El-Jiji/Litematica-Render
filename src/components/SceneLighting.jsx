@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useMemo } from "react";
 import * as THREE from "three";
 import { useThree } from "@react-three/fiber";
+import { SkyGradient } from "./SkyGradient";
 
 export function SceneLighting({
   lightingState,
@@ -14,20 +15,56 @@ export function SceneLighting({
   const directionalLightRef = useRef(null);
   const directionalTargetRef = useRef(new THREE.Object3D());
 
+  // Sky gradient colors derived from lighting state
+  const skyColors = useMemo(() => {
+    if (!showSkyBackground) {
+      return {
+        topColor: "#0a0c14",
+        bottomColor: "#1a1c28",
+        horizonColor: "#141620",
+      };
+    }
+    return {
+      topColor: lightingState.skyColor || "#7ab4e6",
+      bottomColor: lightingState.fogColor || "#c8ddf0",
+      horizonColor: lightingState.fogColor || "#c8ddf0",
+    };
+  }, [lightingState.fogColor, lightingState.skyColor, showSkyBackground]);
+
+  // Use transparent background so the sky sphere shows through
   useEffect(() => {
     const previousBackground = scene.background;
+    scene.background = null;
 
-    scene.background = new THREE.Color(
-      showSkyBackground ? lightingState.backgroundColor : "#141418",
+    // Add fog for atmospheric depth
+    const fogColor = new THREE.Color(
+      showSkyBackground
+        ? lightingState.fogColor || lightingState.backgroundColor
+        : "#141418",
     );
-    scene.fog = null;
+    const modelSpan = Math.max(
+      24,
+      bounds.maxX - bounds.minX,
+      bounds.maxY - bounds.minY,
+      bounds.maxZ - bounds.minZ,
+    );
+    const fogNear = modelSpan * 1.5;
+    const fogFar = modelSpan * 6;
+    scene.fog = new THREE.Fog(fogColor, fogNear, fogFar);
 
     return () => {
       scene.background = previousBackground;
       scene.fog = null;
     };
   }, [
+    bounds.maxX,
+    bounds.maxY,
+    bounds.maxZ,
+    bounds.minX,
+    bounds.minY,
+    bounds.minZ,
     lightingState.backgroundColor,
+    lightingState.fogColor,
     scene,
     showSkyBackground,
   ]);
@@ -63,6 +100,14 @@ export function SceneLighting({
 
   return (
     <>
+      {/* Sky gradient sphere */}
+      <SkyGradient
+        topColor={skyColors.topColor}
+        bottomColor={skyColors.bottomColor}
+        horizonColor={skyColors.horizonColor}
+      />
+
+      {/* Stronger ambient for flatter, BlueMap-like lighting */}
       <ambientLight
         color={lightingState.ambientColor}
         intensity={lightingState.ambientIntensity}
@@ -72,6 +117,7 @@ export function SceneLighting({
         groundColor={lightingState.groundColor}
         intensity={lightingState.hemisphereIntensity}
       />
+      {/* Softer directional for subtle shadows */}
       <directionalLight
         ref={directionalLightRef}
         position={lightingState.directionalPosition}
