@@ -250,10 +250,10 @@ function getFaceVertices(side, from, to) {
   switch (side) {
     case "east":
       return [
+        [x2, y1, z2],
         [x2, y1, z1],
         [x2, y2, z1],
         [x2, y2, z2],
-        [x2, y1, z2],
       ];
     case "west":
       return [
@@ -264,10 +264,10 @@ function getFaceVertices(side, from, to) {
       ];
     case "up":
       return [
-        [x1, y2, z1],
         [x1, y2, z2],
         [x2, y2, z2],
         [x2, y2, z1],
+        [x1, y2, z1],
       ];
     case "down":
       return [
@@ -285,10 +285,10 @@ function getFaceVertices(side, from, to) {
       ];
     case "north":
       return [
+        [x2, y1, z1],
         [x1, y1, z1],
         [x1, y2, z1],
         [x2, y2, z1],
-        [x2, y1, z1],
       ];
     default:
       return [];
